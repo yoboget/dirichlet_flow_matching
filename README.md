@@ -15,7 +15,7 @@ cd selene
 git checkout custom_target_support
 python setup.py build_ext --inplace
 python setup.py install
-pip install pyBigWig pytabix cooler pyranges biopython cooltools
+pip install pyBigWig pytabix cooler pyranges biopython cooltools 
 ```
 
 # Experiments
