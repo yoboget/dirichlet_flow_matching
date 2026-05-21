@@ -1,0 +1,33 @@
+---
+ops: [analyze]
+model: {
+    path: /absolute/path/to/model/architecture.py, 
+    class: ModelArchitectureClassName,
+    class_args: {
+        arg1: val1,
+        arg2: val2
+    },
+    non_strand_specific: mean
+}
+analyze_sequences: !obj:selene_sdk.predict.AnalyzeSequences {
+    trained_model_path: /path/to/trained/model.pth.tar,
+    sequence_length: 1000,
+    features: !obj:selene_sdk.utils.load_features_list {
+        input_path: /path/to/distinct_features.txt 
+    },
+    batch_size: 64,
+    use_cuda: True,
+    write_mem_limit: 5000
+}
+in_silico_mutagenesis: {
+    fa_files: [
+        /path/to/sequences.fa
+    ],
+    save_data: ["logits", "predictions"],
+    output_dir: /path/to/output_dir,
+    # select whether to use the sequence name (description above each sequence
+    # in the FASTA file) as part of the resulting output file
+    use_sequence_name: False
+}
+random_seed: 123
+...
