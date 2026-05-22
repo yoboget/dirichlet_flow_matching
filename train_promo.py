@@ -4,8 +4,10 @@ from utils.promoter_dataset import PromoterDataset
 
 args = parse_train_args()
 
+import argparse
 import torch, os, wandb
 import pytorch_lightning as pl
+torch.serialization.add_safe_globals([argparse.Namespace])
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 
@@ -37,13 +39,15 @@ trainer = pl.Trainer(
     check_val_every_n_epoch=args.check_val_every_n_epoch,
 )
 
+if not args.validate:
+    train_ds = PromoterDataset(n_tsses=100000, rand_offset=10, split='train')
+    train_loader = torch.utils.data.DataLoader(train_ds, batch_size=args.batch_size, shuffle=not args.overfit,
+                                               num_workers=args.num_workers)
+    print("Len train_ds: ", len(train_ds))
 
-train_ds = PromoterDataset(n_tsses=100000, rand_offset=10, split='train')
 val_ds = PromoterDataset(n_tsses=100000, rand_offset=0, split='valid' if not args.validate_on_test else 'test') if not args.overfit else train_ds
-
-train_loader = torch.utils.data.DataLoader(train_ds, batch_size=args.batch_size, shuffle=not args.overfit, num_workers=args.num_workers)
 val_loader = torch.utils.data.DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
-print("Len train_ds: ", len(train_ds))
+
 print("Len val_ds: ", len(val_ds))
 model = PromoterModule(args)
 

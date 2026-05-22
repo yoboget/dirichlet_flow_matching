@@ -3,6 +3,8 @@
 Modifications:
 - dna_modules.py: add a sampling procedure, 
 - flow_utils.py: add some utils
+- train_dna and train_promo: remove entity in wand.init 
+- comment the force-to-commit in parsing
 
 ### [Paper on arXiv](http://arxiv.org/abs/2402.05841)
 

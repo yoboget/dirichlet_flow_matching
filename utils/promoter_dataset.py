@@ -29,6 +29,16 @@ class GenomicSignalFeatures(Target):
         self.feature_index_dict = dict(
             [(feat, index) for index, feat in enumerate(features)])
         self.shape = (len(input_paths), *shape)
+        self._blacklists_paths = blacklists  # keep original paths for re-init after fork
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+
+        # drop unpicklable file handles so forked workers re-initialize cleanly
+        state['initialized'] = False
+        state.pop('data', None)
+        state['blacklists'] = state.get('_blacklists_paths')
+        return state
 
     def get_feature_data(self, chrom, start, end, nan_as_zero=True, feature_indices=None):
         if not self.initialized:

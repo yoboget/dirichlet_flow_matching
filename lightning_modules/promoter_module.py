@@ -159,6 +159,7 @@ class PromoterModule(GeneralModule):
 
         t_span = torch.linspace(1, args.alpha_max, self.args.num_integration_steps, device=self.device)
         for i, (s, t) in enumerate(zip(t_span[:-1], t_span[1:])):
+            print('ici', i)
             prior_weight = args.prior_pseudocount / (s + args.prior_pseudocount - 1)
             seq_xt = torch.cat([xt * (1 - prior_weight), xt * prior_weight], -1)
 
@@ -198,7 +199,7 @@ class PromoterModule(GeneralModule):
         logger.info('Loading sei model')
         self.sei = NonStrandSpecific(Sei(4096, 21907))
         self.sei.load_state_dict(upgrade_state_dict(
-            torch.load('data/promoter_design/best.sei.model.pth.tar', map_location='cpu')['state_dict'],
+            torch.load('data/promoter_design/best.sei.model.pth.tar', map_location='cpu', weights_only=False)['state_dict'],
             prefixes=['module.']))
         self.sei.to(self.device)
         self.generator = np.random.default_rng(seed=137)

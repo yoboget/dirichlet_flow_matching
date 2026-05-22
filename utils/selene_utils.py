@@ -126,7 +126,14 @@ class MemmapGenome(Genome):
                 )
             else:
                 # convert all sequences into encoding
-                self.sequence_data = np.zeros((4, self.lens.sum()), dtype=np.float32)
+                genome_shape = (4, int(self.lens.sum()))
+                if self.memmapfile is not None:
+                    # write directly to disk to avoid allocating ~46 GiB in RAM
+                    self.sequence_data = np.memmap(
+                        self.memmapfile, dtype="float32", mode="w+", shape=genome_shape
+                    )
+                else:
+                    self.sequence_data = np.zeros(genome_shape, dtype=np.float32)
                 print('Iterating through chromosomes')
                 for c in tqdm(self.chrs):
                     sequence = self.genome[c][:].seq
@@ -135,13 +142,9 @@ class MemmapGenome(Genome):
                         :, self.inds[c] : self.inds[c] + self.len_chrs[c]
                     ] = encoding.T
                 if self.memmapfile is not None:
-                    # create memmap file
-                    mmap = np.memmap(
-                        self.memmapfile, dtype="float32", mode="w+", shape=self.sequence_data.shape
-                    )
-                    mmap[:] = self.sequence_data
+                    self.sequence_data.flush()
                     self.sequence_data = np.memmap(
-                        self.memmapfile, dtype="float32", mode="r", shape=self.sequence_data.shape
+                        self.memmapfile, dtype="float32", mode="r", shape=genome_shape
                     )
             print("Finished Initializing Genome")
             self.initialized = True

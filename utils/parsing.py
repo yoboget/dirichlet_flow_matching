@@ -120,13 +120,13 @@ def parse_train_args():
     sys.stdout = Logger(logpath=os.path.join(os.environ['MODEL_DIR'], f'log.log'), syspart=sys.stdout)
     sys.stdout.encoding = None # for pytorch lightning because it is stupid
     sys.stderr = Logger(logpath=os.path.join(os.environ['MODEL_DIR'], f'log.log'), syspart=sys.stderr)
-    if args.wandb:
-        if subprocess.check_output(["git", "status", "-s"]):
-            print('There were uncommited changes. Not running that stuff.')
-            exit()
-    args.commit = (
-        subprocess.check_output(["git", "rev-parse", "HEAD"]).decode("ascii").strip()
-    )
+    # if args.wandb:
+    #     if subprocess.check_output(["git", "status", "-s"]):
+    #         print('There were uncommited changes. Not running that stuff.')
+    #         exit()
+    # args.commit = (
+    #     subprocess.check_output(["git", "rev-parse", "HEAD"]).decode("ascii").strip()
+    # )
     if args.score_free_guidance:
         assert args.cls_free_noclass_ratio == 0, 'no auxiliary class is needed for classifier free guidance if you do score free guidance. The training on the auxialiary classis is basically only data augmentation then.'
     if args.probability_tilt:
