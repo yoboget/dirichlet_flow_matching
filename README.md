@@ -1,5 +1,9 @@
 # Dirichlet Flow Matching with Applications to DNA Sequence Design
 
+Modifications:
+- dna_modules.py: add a sampling procedure, 
+- flow_utils.py: add some utils
+
 ### [Paper on arXiv](http://arxiv.org/abs/2402.05841)
 
 ### Conda environment

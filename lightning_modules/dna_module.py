@@ -185,20 +185,42 @@ class DNAModule(GeneralModule):
                 print(f'WARNING: flow_probs.min(): {flow_probs.min()}. Some values of flow_probs do not lie on the simplex. There are we are {(flow_probs<0).sum()} negative values in flow_probs of shape {flow_probs.shape} that are negative. We are projecting them onto the simplex.')
                 flow_probs = simplex_proj(flow_probs)
 
-            c_factor = self.condflow.c_factor(xt.cpu().numpy(), s.item())
-            c_factor = torch.from_numpy(c_factor).to(xt)
+            if args.flow_method == 'derivative':
+                c_factor = self.condflow.c_factor(xt.cpu().numpy(), s.item())
+                c_factor = torch.from_numpy(c_factor).to(xt)
+                self.inf_counter += 1
+                if torch.isnan(c_factor).any():
+                    print(f'NAN cfactor after: xt.min(): {xt.min()}, flow_probs.min(): {flow_probs.min()}')
+                    if self.args.allow_nan_cfactor:
+                        c_factor = torch.nan_to_num(c_factor)
+                        self.nan_inf_counter += 1
+                    else:
+                        raise RuntimeError(f'NAN cfactor after: xt.min(): {xt.min()}, flow_probs.min(): {flow_probs.min()}')
 
-            self.inf_counter += 1
-            if torch.isnan(c_factor).any():
-                print(f'NAN cfactor after: xt.min(): {xt.min()}, flow_probs.min(): {flow_probs.min()}')
-                if self.args.allow_nan_cfactor:
-                    c_factor = torch.nan_to_num(c_factor)
-                    self.nan_inf_counter += 1
-                else:
-                    raise RuntimeError(f'NAN cfactor after: xt.min(): {xt.min()}, flow_probs.min(): {flow_probs.min()}')
+                if not (flow_probs >= 0).all(): print(f'flow_probs.min(): {flow_probs.min()}')
+                cond_flows = (eye - xt.unsqueeze(-1)) * c_factor.unsqueeze(-2)
+            elif args.flow_method == 'cdf_trick':
+                eps = 10e-8
+                k = xt.size(-1)
 
-            if not (flow_probs >= 0).all(): print(f'flow_probs.min(): {flow_probs.min()}')
-            cond_flows = (eye - xt.unsqueeze(-1)) * c_factor.unsqueeze(-2)
+                # For each (b, n, i) we map the i-th coordinate of x_t[b, n].
+                # x_t itself, clamped, already gives every (b, i) value -- shape (B, n, k).
+                x_i_t = xt.clamp(min=eps, max=1.0 - eps)  # (B, n, k)
+
+                u = beta_cdf(x_i_t, s, k - 1).clamp(eps, 1.0 - eps)  # (B, n, k)
+                x_i_next = beta_ppf(u, t, k - 1).clamp(eps, 1.0 - eps)  # (B, n, k)
+                # scale[b, i] = (1 - x_i_next[b, i]) / (1 - x_t[b, i])
+                scale = (1.0 - x_i_next) / (1.0 - x_i_t)  # (B, n, k)
+
+                # Broadcast rescale: x_next[b, i, j] = x_t[b, j] * scale[b, i]
+                x_next = xt.unsqueeze(-2) * scale.unsqueeze(-1)  # (B, n, k, k)
+
+                # Overwrite the target coordinate (the diagonal in the last two axes):
+                #   x_next[b, i, i] = x_i_next[b, i]
+                diag_idx = torch.arange(k, device=self.device)
+                cond_flows[:, :, diag_idx, diag_idx] = x_i_next
+
+
             flow = (flow_probs.unsqueeze(-2) * cond_flows).sum(-1)
 
 

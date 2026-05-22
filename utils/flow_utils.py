@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from scipy.linalg import sqrtm
+from scipy.stats import beta as scipy_beta
 
 
 def load_flybrain_designed_seqs(path):
@@ -467,3 +468,18 @@ def timestep_embedding(timesteps, dim, max_period=10000):
     if dim % 2:
         embedding = torch.cat([embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
     return embedding
+
+def beta_cdf(x: torch.Tensor, a: torch.Tensor, b: float) -> torch.Tensor:
+    """F_{Beta(a, b)}(x).  x can be any shape; a may be scalar or broadcastable."""
+    x_np = x.detach().cpu().numpy()
+    a_np = a.detach().cpu().numpy() if torch.is_tensor(a) else a
+    out = scipy_beta.cdf(x_np, a_np, b)
+    return torch.as_tensor(out, dtype=x.dtype, device=x.device)
+
+
+def beta_ppf(u: torch.Tensor, a: torch.Tensor, b: float) -> torch.Tensor:
+    """F_{Beta(a, b)}^{-1}(u).  Inverse CDF (quantile function)."""
+    u_np = u.detach().cpu().numpy()
+    a_np = a.detach().cpu().numpy() if torch.is_tensor(a) else a
+    out = scipy_beta.ppf(u_np, a_np, b)
+    return torch.as_tensor(out, dtype=u.dtype, device=u.device)
