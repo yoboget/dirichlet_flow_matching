@@ -85,6 +85,7 @@ def parse_train_args():
     parser.add_argument("--clean_cls_model", choices=['mlp', 'cnn', 'transformer', 'deepflybrain'], default='cnn')
     parser.add_argument("--clean_data", action="store_true", help='do not noise to the model input. E.g. for training a clean calssifier.')
     parser.add_argument("--mode", choices=['distill', 'dirichlet', 'riemannian', 'mlm', 'ardm', 'lrar', 'cdcd', 'ppl_eval'], default='dirichlet')
+    parser.add_argument("--flow_method", choices=['original', 'cdf_trick', 'unsid'], default='unsid')
     parser.add_argument("--simplex_spacing", type=int, default=1000, help='deprecated, has no influence')
     parser.add_argument("--prior_pseudocount", type=float, default=2, help='hyperparameter for expand_simplex function. Can be kept at 2 and should not matter much.')
     parser.add_argument("--dropout", type=float, default=0.0)
@@ -106,7 +107,7 @@ def parse_train_args():
 
     # Logging
     parser.add_argument("--no_tqdm", action="store_true")
-    parser.add_argument("--print_freq", type=int, default=100)
+    parser.add_argument("--print_freq", type=int, default=10)
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--run_name", type=str, default="default")
     

@@ -13,11 +13,13 @@ import yaml
 sns.set_style('whitegrid')
 from matplotlib import pyplot as plt
 from torch import optim
+import torch.nn.functional as F
+from torch.distributions import Categorical, Dirichlet
 
 from model.dna_models import MLPModel, CNNModel, TransformerModel, DeepFlyBrainModel
 from utils.esm import upgrade_state_dict
 from utils.flow_utils import DirichletConditionalFlow, expand_simplex, sample_cond_prob_path, simplex_proj, \
-    get_wasserstein_dist, update_ema, load_flybrain_designed_seqs
+    get_wasserstein_dist, update_ema, load_flybrain_designed_seqs, beta_ppf, beta_cdf
 from lightning_modules.general_module import GeneralModule
 from utils.logging import get_logger
 
@@ -185,7 +187,7 @@ class DNAModule(GeneralModule):
                 print(f'WARNING: flow_probs.min(): {flow_probs.min()}. Some values of flow_probs do not lie on the simplex. There are we are {(flow_probs<0).sum()} negative values in flow_probs of shape {flow_probs.shape} that are negative. We are projecting them onto the simplex.')
                 flow_probs = simplex_proj(flow_probs)
 
-            if args.flow_method == 'derivative':
+            if args.flow_method == 'original':
                 c_factor = self.condflow.c_factor(xt.cpu().numpy(), s.item())
                 c_factor = torch.from_numpy(c_factor).to(xt)
                 self.inf_counter += 1
@@ -199,6 +201,15 @@ class DNAModule(GeneralModule):
 
                 if not (flow_probs >= 0).all(): print(f'flow_probs.min(): {flow_probs.min()}')
                 cond_flows = (eye - xt.unsqueeze(-1)) * c_factor.unsqueeze(-2)
+                flow = (flow_probs.unsqueeze(-2) * cond_flows).sum(-1)
+
+                if self.args.vectorfield_addition:
+                    flow_cond = (probs_cond.unsqueeze(-2) * cond_flows).sum(-1)
+                    flow_uncond = (probs_unccond.unsqueeze(-2) * cond_flows).sum(-1)
+                    flow = flow_cond * self.args.guidance_scale + (1 - self.args.guidance_scale) * flow_uncond
+
+                xt = xt + flow * (t - s)
+
             elif args.flow_method == 'cdf_trick':
                 eps = 10e-8
                 k = xt.size(-1)
@@ -218,18 +229,14 @@ class DNAModule(GeneralModule):
                 # Overwrite the target coordinate (the diagonal in the last two axes):
                 #   x_next[b, i, i] = x_i_next[b, i]
                 diag_idx = torch.arange(k, device=self.device)
-                cond_flows[:, :, diag_idx, diag_idx] = x_i_next
+                x_next[:, :, diag_idx, diag_idx] = x_i_next
+                xt = (flow_probs.unsqueeze(-2) * x_next).sum(-1)
+            elif args.flow_method == 'unsid':
+                k = Categorical(flow_probs).sample().to(self.device)
+                k_one_hot = F.one_hot(k, num_classes=flow_probs.size(-1)).to(self.device)
+                alpha = 1 + t * k_one_hot
+                xt = Dirichlet(alpha).sample().to(self.device)
 
-
-            flow = (flow_probs.unsqueeze(-2) * cond_flows).sum(-1)
-
-
-            if self.args.vectorfield_addition:
-                flow_cond = (probs_cond.unsqueeze(-2) * cond_flows).sum(-1)
-                flow_uncond = (probs_unccond.unsqueeze(-2) * cond_flows).sum(-1)
-                flow = flow_cond * self.args.guidance_scale + (1 - self.args.guidance_scale) * flow_uncond
-
-            xt = xt + flow * (t - s)
 
             if not torch.allclose(xt.sum(2), torch.ones((B, L), device=self.device), atol=1e-4) or not (xt >= 0).all():
                 print(f'WARNING: xt.min(): {xt.min()}. Some values of xt do not lie on the simplex. There are we are {(xt<0).sum()} negative values in xt of shape {xt.shape} that are negative. We are projecting them onto the simplex.')

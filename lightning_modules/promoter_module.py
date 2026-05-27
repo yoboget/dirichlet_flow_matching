@@ -5,11 +5,14 @@ import pandas as pd
 import torch, time, os
 import wandb
 import yaml
+import time
 from selene_sdk.utils import NonStrandSpecific
 from torch import optim
+import torch.nn.functional as F
+from torch.distributions import Categorical, Dirichlet
 
 from utils.esm import upgrade_state_dict
-from utils.flow_utils import DirichletConditionalFlow, expand_simplex, sample_cond_prob_path, simplex_proj
+from utils.flow_utils import DirichletConditionalFlow, expand_simplex, sample_cond_prob_path, simplex_proj, beta_cdf, beta_ppf
 from lightning_modules.general_module import GeneralModule
 from utils.logging import get_logger
 from model.promoter_model import PromoterModel
@@ -152,6 +155,8 @@ class PromoterModule(GeneralModule):
 
     @torch.no_grad()
     def dirichlet_flow_inference(self, seq, signal, model, args):
+        print('Batch sample start')
+        start_time = time.time()
         B, L = seq.shape
         x0 = torch.distributions.Dirichlet(torch.ones(B, L, model.alphabet_size, device=seq.device)).sample()
         eye = torch.eye(model.alphabet_size).to(x0)
@@ -159,26 +164,54 @@ class PromoterModule(GeneralModule):
 
         t_span = torch.linspace(1, args.alpha_max, self.args.num_integration_steps, device=self.device)
         for i, (s, t) in enumerate(zip(t_span[:-1], t_span[1:])):
-            print('ici', i)
+            print(s)
+
             prior_weight = args.prior_pseudocount / (s + args.prior_pseudocount - 1)
             seq_xt = torch.cat([xt * (1 - prior_weight), xt * prior_weight], -1)
 
             logits = model(seq_xt, signal, s[None].expand(B))
             out_probs = torch.nn.functional.softmax(logits / args.flow_temp, -1)
+            if args.flow_method == 'original':
+                c_factor = self.condflow.c_factor(xt.cpu().numpy(), s.item())
+                c_factor = torch.from_numpy(c_factor).to(xt)
+                if torch.isnan(c_factor).any():
+                    print(f'NAN cfactor after: xt.min(): {xt.min()}, out_probs.min(): {out_probs.min()}')
+                    c_factor = torch.nan_to_num(c_factor)
 
-            c_factor = self.condflow.c_factor(xt.cpu().numpy(), s.item())
-            c_factor = torch.from_numpy(c_factor).to(xt)
-            if torch.isnan(c_factor).any():
-                print(f'NAN cfactor after: xt.min(): {xt.min()}, out_probs.min(): {out_probs.min()}')
-                c_factor = torch.nan_to_num(c_factor)
+                cond_flows = (eye - xt.unsqueeze(-1)) * c_factor.unsqueeze(-2)
+                flow = (out_probs.unsqueeze(-2) * cond_flows).sum(-1)
+                xt = xt + flow * (t - s)
+            elif args.flow_method == 'cdf_trick':
+                eps = 10e-8
+                k = xt.size(-1)
+                # For each (b, n, i) we map the i-th coordinate of x_t[b, n].
+                # x_t itself, clamped, already gives every (b, i) value -- shape (B, n, k).
+                x_i_t = xt.clamp(min=eps, max=1.0 - eps)  # (B, n, k)
 
-            cond_flows = (eye - xt.unsqueeze(-1)) * c_factor.unsqueeze(-2)
-            flow = (out_probs.unsqueeze(-2) * cond_flows).sum(-1)
-            xt = xt + flow * (t - s)
+                u = beta_cdf(x_i_t, s, k - 1)#.clamp(eps, 1.0 - eps)  # (B, n, k)
+                x_i_next = beta_ppf(u, t, k - 1)  # (B, n, k)
+                x_i_next = torch.as_tensor(x_i_next, dtype=x_i_t.dtype, device=x_i_t.device).clamp(eps, 1.0 - eps)
+                # scale[b, i] = (1 - x_i_next[b, i]) / (1 - x_t[b, i])
+                scale = (1.0 - x_i_next) / (1.0 - x_i_t)  # (B, n, k)
+                # scale = x_i_next / x_i_t
+
+                # Broadcast rescale: x_next[b, i, j] = x_t[b, j] * scale[b, i]
+                x_next = xt.unsqueeze(-2) * scale.unsqueeze(-1)  # (B, n, k, k)
+                # Overwrite the target coordinate (the diagonal in the last two axes):
+                # x_next[b, i, i] = x_i_next[b, i]
+                diag_idx = torch.arange(k, device=self.device)
+                x_next[:, :, diag_idx, diag_idx] = x_i_next
+                xt = (out_probs.unsqueeze(-1) * x_next).sum(-2)
+            elif args.flow_method == 'unsid':
+                k = Categorical(out_probs).sample().to(self.device)
+                k_one_hot = F.one_hot(k, num_classes=out_probs.size(-1)).to(self.device)
+                alpha = 1 + (t-1) * k_one_hot
+                xt = Dirichlet(alpha).sample().to(self.device)
+
             if not torch.allclose(xt.sum(2), torch.ones((B, L), device=self.device), atol=1e-4) or not (xt >= 0).all():
                 print(f'WARNING: xt.min(): {xt.min()}. Some values of xt do not lie on the simplex. There are we are {(xt<0).sum()} negative values in xt of shape {xt.shape} that are negative.')
                 xt = simplex_proj(xt)
-
+            print(f'Time taken: {time.time() - start_time}')
         return logits, x0
 
 

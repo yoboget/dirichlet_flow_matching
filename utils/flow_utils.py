@@ -469,17 +469,44 @@ def timestep_embedding(timesteps, dim, max_period=10000):
         embedding = torch.cat([embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
     return embedding
 
-def beta_cdf(x: torch.Tensor, a: torch.Tensor, b: float) -> torch.Tensor:
-    """F_{Beta(a, b)}(x).  x can be any shape; a may be scalar or broadcastable."""
-    x_np = x.detach().cpu().numpy()
-    a_np = a.detach().cpu().numpy() if torch.is_tensor(a) else a
-    out = scipy_beta.cdf(x_np, a_np, b)
-    return torch.as_tensor(out, dtype=x.dtype, device=x.device)
+# def beta_cdf(x: torch.Tensor, a: torch.Tensor, b: float) -> torch.Tensor:
+#     """F_{Beta(a, b)}(x).  x can be any shape; a may be scalar or broadcastable."""
+#     x_np = x.detach().cpu().numpy()
+#     a_np = a.detach().cpu().numpy() if torch.is_tensor(a) else a
+#     out = scipy_beta.cdf(x_np, a_np, b)
+#     return torch.as_tensor(out, dtype=x.dtype, device=x.device)
+
+    # def beta_ppf(u: torch.Tensor, a: torch.Tensor, b: float) -> torch.Tensor:
+#     """F_{Beta(a, b)}^{-1}(u).  Inverse CDF (quantile function)."""
+#     u_np = u.detach().cpu().numpy()
+#     a_np = a.detach().cpu().numpy() if torch.is_tensor(a) else a
+#     out = scipy_beta.ppf(u_np, a_np, b)
+#     return torch.as_tensor(out, dtype=u.dtype, device=u.device)
 
 
-def beta_ppf(u: torch.Tensor, a: torch.Tensor, b: float) -> torch.Tensor:
-    """F_{Beta(a, b)}^{-1}(u).  Inverse CDF (quantile function)."""
-    u_np = u.detach().cpu().numpy()
-    a_np = a.detach().cpu().numpy() if torch.is_tensor(a) else a
-    out = scipy_beta.ppf(u_np, a_np, b)
-    return torch.as_tensor(out, dtype=u.dtype, device=u.device)
+from scipy.special import betainc, betaincinv
+
+def beta_cdf(x: torch.Tensor, a, b: float) -> torch.Tensor:
+  a_np = a.detach().cpu().numpy() if torch.is_tensor(a) else a
+  out = betainc(a_np, b, x.detach().cpu().numpy())
+  return out #torch.as_tensor(out, dtype=x.dtype, device=x.device)
+
+def beta_ppf(u, a, b: float) -> torch.Tensor:
+  a_np = a.detach().cpu().numpy() if torch.is_tensor(a) else a
+  out = betaincinv(a_np, b, u) #u.detach().cpu().numpy())
+  return out #torch.as_tensor(out, dtype=u.dtype, device=u.device)
+
+# def _beta_log_pdf(x, a, b_val):
+#   log_beta = torch.special.gammaln(a) + math.lgamma(b_val) - torch.special.gammaln(a + b_val)
+#   return (a - 1) * x.clamp(min=1e-7).log() + (b_val - 1) * (1 - x).clamp(min=1e-7).log() - log_beta
+#
+# def beta_ppf(u: torch.Tensor, a: torch.Tensor, b: float, n_iter: int = 15) -> torch.Tensor:
+#   x = torch.full_like(u, a / (a + b) if not torch.is_tensor(a) else 0.5)  # mean as init
+#   for _ in range(n_iter):
+#       a_np = a.detach().cpu().numpy() if torch.is_tensor(a) else a
+#       cdf = torch.as_tensor(betainc(a_np, b, x.detach().cpu().numpy()), dtype=u.dtype, device=u.device)
+#       pdf = _beta_log_pdf(x, a, b).exp()
+#       x = (x - (cdf - u) / pdf.clamp(min=1e-12)).clamp(1e-6, 1 - 1e-6)
+#   return x
+#
+
