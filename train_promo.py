@@ -26,7 +26,7 @@ trainer = pl.Trainer(
     num_sanity_val_steps=0,
     limit_train_batches=args.limit_train_batches,
     limit_val_batches=args.limit_val_batches,
-    enable_progress_bar=not (args.wandb or args.no_tqdm) or os.getlogin() == 'anonymized',
+    enable_progress_bar=not (args.wandb or args.no_tqdm) or os.environ.get('USER', os.environ.get('LOGNAME', '')) == 'anonymized',
     gradient_clip_val=args.grad_clip,
     callbacks=[
         ModelCheckpoint(
