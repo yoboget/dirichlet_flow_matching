@@ -11,6 +11,9 @@ torch.serialization.add_safe_globals([argparse.Namespace])
 from pytorch_lightning.callbacks import ModelCheckpoint
 print("CUDA available:", torch.cuda.is_available())
 print("Device count:", torch.cuda.device_count())
+print("Torch cuda version:", torch.version.cuda)
+torch.cuda.init()
+torch.cuda.set_device(0)
 
 if args.wandb:
     wandb.init(
@@ -20,7 +23,7 @@ if args.wandb:
         config=args,
     )
 
-print(torch.version.cuda)
+
 
 trainer = pl.Trainer(
     default_root_dir=os.environ["MODEL_DIR"],
