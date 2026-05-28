@@ -9,7 +9,8 @@ import torch, os, wandb
 import pytorch_lightning as pl
 torch.serialization.add_safe_globals([argparse.Namespace])
 from pytorch_lightning.callbacks import ModelCheckpoint
-
+print("CUDA available:", torch.cuda.is_available())
+print("Device count:", torch.cuda.device_count())
 
 if args.wandb:
     wandb.init(
