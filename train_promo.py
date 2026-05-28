@@ -19,7 +19,7 @@ if args.wandb:
         config=args,
     )
 
-print(torch.cuda.current_device())
+print(torch.version.cuda)
 
 trainer = pl.Trainer(
     default_root_dir=os.environ["MODEL_DIR"],
