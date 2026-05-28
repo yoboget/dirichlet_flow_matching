@@ -42,7 +42,10 @@ def init():
         os.dup2(out_file.fileno(), 1)
         os.dup2(out_file.fileno(), 2)
     
-if not os.getlogin() == 'anonymized': init()
+# if not os.getlogin() == 'anonymized': init()
+if os.environ.get('USER', os.environ.get('LOGNAME', '')) != 'anonymized':
+    init()
+
 
 class Logger(object):
     def __init__(self, logpath, syspart=sys.stdout):
