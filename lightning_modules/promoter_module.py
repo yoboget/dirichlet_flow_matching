@@ -164,8 +164,6 @@ class PromoterModule(GeneralModule):
 
         t_span = torch.linspace(1, args.alpha_max, self.args.num_integration_steps, device=self.device)
         for i, (s, t) in enumerate(zip(t_span[:-1], t_span[1:])):
-            print(s)
-
             prior_weight = args.prior_pseudocount / (s + args.prior_pseudocount - 1)
             seq_xt = torch.cat([xt * (1 - prior_weight), xt * prior_weight], -1)
 
@@ -211,7 +209,7 @@ class PromoterModule(GeneralModule):
             if not torch.allclose(xt.sum(2), torch.ones((B, L), device=self.device), atol=1e-4) or not (xt >= 0).all():
                 print(f'WARNING: xt.min(): {xt.min()}. Some values of xt do not lie on the simplex. There are we are {(xt<0).sum()} negative values in xt of shape {xt.shape} that are negative.')
                 xt = simplex_proj(xt)
-            print(f'Time taken: {time.time() - start_time}')
+        print(f'Time taken: {time.time() - start_time}')
         return logits, x0
 
 
