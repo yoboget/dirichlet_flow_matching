@@ -9,7 +9,7 @@ import torch, os, wandb
 import pytorch_lightning as pl
 torch.serialization.add_safe_globals([argparse.Namespace])
 from pytorch_lightning.callbacks import ModelCheckpoint
-
+print(torch.cuda.current_device())
 
 if args.wandb:
     wandb.init(
