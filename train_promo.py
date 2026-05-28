@@ -20,8 +20,7 @@ if args.wandb:
         settings=wandb.Settings(start_method="fork"),
         project="betawolf",
         name=args.run_name,
-        config=args,
-        mode="disabled"
+        config=args
     )
 
 
