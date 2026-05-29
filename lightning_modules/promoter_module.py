@@ -212,6 +212,7 @@ class PromoterModule(GeneralModule):
                     k = Categorical(out_probs).sample().to(self.device)
                     k_one_hot = F.one_hot(k, num_classes=out_probs.size(-1)).to(self.device)
                     alpha = 1 + scale * k_one_hot
+                    print(alpha[0, 0])
                     xt = Dirichlet(alpha).sample().to(self.device)
 
             if not torch.allclose(xt.sum(2), torch.ones((B, L), device=self.device), atol=1e-4) or not (xt >= 0).all():
