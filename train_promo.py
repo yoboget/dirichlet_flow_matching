@@ -21,7 +21,7 @@ if args.wandb:
         project="betawolf",
         name=args.run_name,
         config=args,
-        mode='disabled'
+        mode='online'
     )
 
 
