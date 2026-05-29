@@ -9,6 +9,8 @@ torch.manual_seed(0)
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 
+torch.serialization.add_safe_globals([args.Namespace])
+
 if args.wandb:
     wandb.init(
         # entity="anonymized",
