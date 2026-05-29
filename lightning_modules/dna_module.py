@@ -234,7 +234,7 @@ class DNAModule(GeneralModule):
             elif args.flow_method == 'unsid':
                 k = Categorical(flow_probs).sample().to(self.device)
                 k_one_hot = F.one_hot(k, num_classes=flow_probs.size(-1)).to(self.device)
-                alpha = 1 + t * k_one_hot
+                alpha = 1 + (t - 1) * k_one_hot
                 xt = Dirichlet(alpha).sample().to(self.device)
 
 
