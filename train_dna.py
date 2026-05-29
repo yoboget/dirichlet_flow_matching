@@ -13,7 +13,7 @@ if args.wandb:
     wandb.init(
         # entity="anonymized",
         settings=wandb.Settings(start_method="fork"),
-        project="betawolf",
+        project=f"DNA_{args.mode}_{args.flow_method}_{args.dataset_type}",
         name=args.run_name,
         config=args,
     )
