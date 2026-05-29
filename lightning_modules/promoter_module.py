@@ -207,7 +207,7 @@ class PromoterModule(GeneralModule):
                 xt = Dirichlet(alpha).sample().to(self.device)
             elif args.flow_method == 'unsid2':
                 t = (t-1)/args.alpha_max
-                scale = -(torch.log(1 - t) * 3)
+                scale = -(torch.log(1 - t) * 2)
                 k = Categorical(out_probs).sample().to(self.device)
                 k_one_hot = F.one_hot(k, num_classes=out_probs.size(-1)).to(self.device)
                 alpha = 1 + (t*scale) * k_one_hot
