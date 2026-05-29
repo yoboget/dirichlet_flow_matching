@@ -206,12 +206,13 @@ class PromoterModule(GeneralModule):
                 alpha = 1 + (t-1) * k_one_hot
                 xt = Dirichlet(alpha).sample().to(self.device)
             elif args.flow_method == 'unsid2':
-                t = (t-1)/args.alpha_max
-                scale = -(torch.log(1 - t) * 2)
-                k = Categorical(out_probs).sample().to(self.device)
-                k_one_hot = F.one_hot(k, num_classes=out_probs.size(-1)).to(self.device)
-                alpha = 1 + scale * k_one_hot
-                xt = Dirichlet(alpha).sample().to(self.device)
+                if t.item() != args.alpha_max:
+                    t = (t-1)/(args.alpha_max-1)
+                    scale = -(torch.log(1 - t) * 2)
+                    k = Categorical(out_probs).sample().to(self.device)
+                    k_one_hot = F.one_hot(k, num_classes=out_probs.size(-1)).to(self.device)
+                    alpha = 1 + scale * k_one_hot
+                    xt = Dirichlet(alpha).sample().to(self.device)
 
             if not torch.allclose(xt.sum(2), torch.ones((B, L), device=self.device), atol=1e-4) or not (xt >= 0).all():
                 print(f'WARNING: xt.min(): {xt.min()}. Some values of xt do not lie on the simplex. There are we are {(xt<0).sum()} negative values in xt of shape {xt.shape} that are negative.')
