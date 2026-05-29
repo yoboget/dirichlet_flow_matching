@@ -579,7 +579,7 @@ class DNAModule(GeneralModule):
                 self.clean_cls_model = DeepFlyBrainModel(hparams['args'], alphabet_size=self.model.alphabet_size, num_cls=self.model.num_cls, classifier=True)
             else:
                 raise NotImplementedError()
-            self.clean_cls_model.load_state_dict(upgrade_state_dict(torch.load(self.args.clean_cls_ckpt, map_location=self.device, weights_only=True)['state_dict'],prefixes=['model.']))
+            self.clean_cls_model.load_state_dict(upgrade_state_dict(torch.load(self.args.clean_cls_ckpt, map_location=self.device, weights_only=False)['state_dict'],prefixes=['model.']))
             self.clean_cls_model.eval()
             self.clean_cls_model.to(self.device)
             for param in self.clean_cls_model.parameters():
