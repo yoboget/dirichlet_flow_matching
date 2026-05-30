@@ -4,12 +4,13 @@ from lightning_modules.dna_module import DNAModule
 from utils.dataset import ToyDataset, TwoClassOverfitDataset, EnhancerDataset
 from utils.parsing import parse_train_args
 args = parse_train_args()
+import argparse
 import torch, os, wandb
 torch.manual_seed(0)
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-torch.serialization.add_safe_globals([args.Namespace])
+torch.serialization.add_safe_globals([argparse.Namespace])
 
 if args.wandb:
     wandb.init(
