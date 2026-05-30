@@ -6,7 +6,7 @@ from utils.parsing import parse_train_args
 args = parse_train_args()
 import argparse
 import torch, os, wandb
-torch.manual_seed(0)
+torch.manual_seed(1)
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 
