@@ -19,7 +19,7 @@ from torch.distributions import Categorical, Dirichlet
 from model.dna_models import MLPModel, CNNModel, TransformerModel, DeepFlyBrainModel
 from utils.esm import upgrade_state_dict
 from utils.flow_utils import DirichletConditionalFlow, expand_simplex, sample_cond_prob_path, simplex_proj, \
-    get_wasserstein_dist, update_ema, load_flybrain_designed_seqs, beta_ppf, beta_cdf
+    get_wasserstein_dist, update_ema, load_flybrain_designed_seqs, beta_ppf, beta_cdf, BetaTable
 from lightning_modules.general_module import GeneralModule
 from utils.logging import get_logger
 
@@ -32,7 +32,13 @@ class DNAModule(GeneralModule):
         super().__init__(args)
         self.load_model(alphabet_size, num_cls)
 
-        self.condflow = DirichletConditionalFlow(K=self.model.alphabet_size, alpha_spacing=0.001, alpha_max=args.alpha_max)
+        if args.flow_method == 'original':
+            self.condflow = DirichletConditionalFlow(K=self.model.alphabet_size, alpha_spacing=0.001,
+                                                     alpha_max=args.alpha_max)
+        elif args.flow_method == 'cdf_trick':
+            alphas = torch.arange(1, args.alpha_max, (args.alpha_max-1)/args.num_integration_steps).to(self.device)
+            self.beta = BetaTable(alphas, k=self.model.alphabet_size, device=self.device, n_grid=8192)
+
         self.crossent_loss = torch.nn.CrossEntropyLoss(reduction='none')
 
         self.toy_data = toy_data
@@ -149,7 +155,6 @@ class DNAModule(GeneralModule):
         x0 = torch.distributions.Dirichlet(torch.ones(B, L, model.alphabet_size, device=seq.device)).sample()
         eye = torch.eye(K).to(x0)
         xt = x0.clone()
-
         t_span = torch.linspace(1, args.alpha_max, self.args.num_integration_steps, device=self.device)
         for i, (s, t) in enumerate(zip(t_span[:-1], t_span[1:])):
             xt_expanded, prior_weights = expand_simplex(xt, s[None].expand(B), args.prior_pseudocount)
@@ -217,8 +222,11 @@ class DNAModule(GeneralModule):
                 # x_t itself, clamped, already gives every (b, i) value -- shape (B, n, k).
                 x_i_t = xt.clamp(min=eps, max=1.0 - eps)  # (B, n, k)
 
-                u = beta_cdf(x_i_t, s, k - 1)
-                x_i_next = beta_ppf(u, t, k - 1)  # (B, n, k)
+                # u = beta_cdf(x_i_t, s, k - 1)
+                # x_i_next = beta_ppf(u, t, k - 1)  # (B, n, k)
+                u = self.beta.cdf(x_i_t, i)
+                x_i_next = self.beta.ppf(u, i+1)
+
                 x_i_next = torch.as_tensor(x_i_next, dtype=x_i_t.dtype, device=x_i_t.device).clamp(eps, 1.0 - eps)
                 # scale[b, i] = (1 - x_i_next[b, i]) / (1 - x_t[b, i])
                 scale = (1.0 - x_i_next) / (1.0 - x_i_t)  # (B, n, k)

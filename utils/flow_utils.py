@@ -510,3 +510,102 @@ def beta_ppf(u, a, b: float) -> torch.Tensor:
 #   return x
 #
 
+class BetaTable:
+    """
+    Precomputed CDF/PPF tables for Beta(alpha_s, b) for each alpha_s in a schedule.
+
+    Parameters
+    ----------
+    alphas      : 1-D array-like of strictly positive floats, length T+1.
+                  These are the alpha values that will be queried, in order.
+    b           : the second Beta parameter (k-1 in Dirichlet FM).
+    n_grid      : number of grid nodes per alpha (default 1024). 512 is also fine.
+    device, dtype: where to put the tensors and at what precision.
+
+    Notes
+    -----
+    * Memory: 2 * len(alphas) * n_grid floats.  For T=200, n_grid=1024, fp32 that's
+      ~1.6 MB -- trivial.
+    * Build cost: T+1 calls to scipy.special.betaincinv on an array of size n_grid.
+      For T=200, n_grid=1024 this is about one second total on CPU.
+    """
+
+    def __init__(
+            self,
+            alphas,
+            k: float,
+            n_grid: int = 1024,
+            device: str = "cpu",
+            dtype: torch.dtype = torch.float32,
+    ):
+        alphas = np.asarray(alphas, dtype=np.float64)
+        assert alphas.ndim == 1 and (alphas > 0).all()
+        self.k_ = float(k-1)
+        self.device = torch.device(device)
+        self.dtype = dtype
+        self.n_grid = int(n_grid)
+
+        # -------------------------------------------------------------------
+        # Build a *shared* u-grid that is dense at both ends (the Beta tails)
+        # and at the middle.  A symmetric stretched grid works well:
+        #     u_grid = 0.5 * (1 + tanh(linspace(-c, c, n)))
+        # ...but a simpler and equally effective choice is to take a uniform
+        # u-grid in (eps, 1-eps).  Because we then invert it through scipy,
+        # the resulting x-grid is automatically adapted to the Beta's shape.
+        # -------------------------------------------------------------------
+        eps = 1e-7
+        u_grid = np.linspace(eps, 1.0 - eps, self.n_grid, dtype=np.float64)
+
+        # x_table[s, j] = betaincinv(alpha_s, b, u_grid[j])
+        x_table = np.empty((len(alphas), self.n_grid), dtype=np.float64)
+        for s, a in enumerate(alphas):
+            x_table[s] = betaincinv(a, self.k_, u_grid)
+
+        # Sanity: monotone in u, in (0, 1), and the endpoint behaviour is OK.
+        assert np.all(np.diff(x_table, axis=1) >= -1e-12)
+        x_table = np.clip(x_table, eps, 1.0 - eps)
+
+        # Torch tensors. Same u-grid for every alpha, so store it once.
+        self.u_grid = torch.as_tensor(u_grid, dtype=dtype, device=self.device)  # (G,)
+        self.x_table = torch.as_tensor(x_table, dtype=dtype, device=self.device)  # (T+1, G)
+
+    # -------------------------------------------------------------------------
+    # Internal: monotone piecewise-linear interpolation y = f(x) given the
+    # nodes (xs, ys) with xs strictly increasing along the last axis.
+    # Works for `query` of arbitrary shape; `xs`, `ys` are 1-D (length G).
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def _interp1d(query: torch.Tensor, xs: torch.Tensor, ys: torch.Tensor) -> torch.Tensor:
+        # xs: (G,), ys: (G,), query: (...,)
+        q = query.clamp(min=xs[0].item(), max=xs[-1].item())
+        # right-side bin index, then back off to a valid left neighbour
+        idx_r = torch.searchsorted(xs, q, right=True).clamp(1, xs.numel() - 1)
+        idx_l = idx_r - 1
+
+        x_l = xs[idx_l];
+        x_r = xs[idx_r]
+        y_l = ys[idx_l];
+        y_r = ys[idx_r]
+        w = (q - x_l) / (x_r - x_l).clamp_min(1e-30)
+        return y_l + w * (y_r - y_l)
+
+    # -------------------------------------------------------------------------
+    # Public API
+    # -------------------------------------------------------------------------
+    def ppf(self, u: torch.Tensor, alpha_idx: int) -> torch.Tensor:
+        """Inverse CDF at scheduled alpha index s:   x = F^{-1}(u;  alpha_s, b)."""
+        u = u.to(self.dtype).to(self.device)
+        xs = self.u_grid  # (G,) -- the u-axis is shared
+        ys = self.x_table[alpha_idx]  # (G,) -- x as a function of u
+        return self._interp1d(u, xs, ys)
+
+    def cdf(self, x: torch.Tensor, alpha_idx: int) -> torch.Tensor:
+        """Forward CDF at scheduled alpha index s:   u = F(x;  alpha_s, b).
+        Implemented by interpolating the *inverse* of the same table: we already
+        know (x_table[s, :], u_grid) pairs, so we just swap their roles.
+        """
+        x = x.to(self.dtype).to(self.device)
+        xs = self.x_table[alpha_idx]  # (G,) -- now the abscissae
+        ys = self.u_grid  # (G,) -- and these are the ordinates
+        return self._interp1d(x, xs, ys)
+
