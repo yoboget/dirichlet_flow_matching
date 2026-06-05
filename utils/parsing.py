@@ -103,7 +103,7 @@ def parse_train_args():
     parser.add_argument("--simplex_encoding_dim", type=int, default=64)
     parser.add_argument("--flow_temp", type=float, default=1.0)
     parser.add_argument('--val_pred_type', type=str, choices=['argmax', 'sample'], default='argmax')
-    parser.add_argument('--num_integration_steps', type=int, default=20, help='The number of integration steps used during inference.')
+    parser.add_argument('--num_integration_steps', type=int, default=100, help='The number of integration steps used during inference.')
 
     # Logging
     parser.add_argument("--no_tqdm", action="store_true")
