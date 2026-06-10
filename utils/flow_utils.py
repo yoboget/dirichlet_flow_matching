@@ -582,9 +582,9 @@ class BetaTable:
         idx_r = torch.searchsorted(xs, q, right=True).clamp(1, xs.numel() - 1)
         idx_l = idx_r - 1
 
-        x_l = xs[idx_l];
+        x_l = xs[idx_l]
         x_r = xs[idx_r]
-        y_l = ys[idx_l];
+        y_l = ys[idx_l]
         y_r = ys[idx_r]
         w = (q - x_l) / (x_r - x_l).clamp_min(1e-30)
         return y_l + w * (y_r - y_l)
