@@ -554,7 +554,7 @@ class BetaTable:
         # the resulting x-grid is automatically adapted to the Beta's shape.
         # -------------------------------------------------------------------
         eps = 1e-8
-        u_grid = np.linspace(eps, 1.0 - eps, self.n_grid, dtype=np.float64)
+        u_grid = np.linspace(0, 1.0, self.n_grid, dtype=np.float64)
 
         # x_table[s, j] = betaincinv(alpha_s, b, u_grid[j])
         x_table = np.empty((len(alphas), self.n_grid), dtype=np.float64)
@@ -563,7 +563,7 @@ class BetaTable:
 
         # Sanity: monotone in u, in (0, 1), and the endpoint behaviour is OK.
         assert np.all(np.diff(x_table, axis=1) >= -1e-12)
-        x_table = np.clip(x_table, eps, 1.0 - eps)
+        #x_table = np.clip(x_table, eps, 1.0 - eps)
 
         # Torch tensors. Same u-grid for every alpha, so store it once.
         self.u_grid = torch.as_tensor(u_grid, dtype=dtype, device=self.device)  # (G,)
