@@ -36,7 +36,7 @@ class DNAModule(GeneralModule):
             self.condflow = DirichletConditionalFlow(K=self.model.alphabet_size, alpha_spacing=0.001,
                                                      alpha_max=args.alpha_max)
         elif args.flow_method == 'cdf_trick':
-            alphas = torch.arange(1, args.alpha_max, (args.alpha_max-1)/args.num_integration_steps).to(self.device)
+            alphas = torch.arange(1, args.alpha_max, ((args.alpha_max-1)/(args.num_integration_steps+1))).to(self.device)
             self.beta = BetaTable(alphas, k=self.model.alphabet_size, device=self.device, n_grid=8192)
 
         self.crossent_loss = torch.nn.CrossEntropyLoss(reduction='none')
