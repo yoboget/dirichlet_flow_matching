@@ -553,7 +553,7 @@ class BetaTable:
         # u-grid in (eps, 1-eps).  Because we then invert it through scipy,
         # the resulting x-grid is automatically adapted to the Beta's shape.
         # -------------------------------------------------------------------
-        eps = 1e-7
+        eps = 1e-8
         u_grid = np.linspace(eps, 1.0 - eps, self.n_grid, dtype=np.float64)
 
         # x_table[s, j] = betaincinv(alpha_s, b, u_grid[j])
