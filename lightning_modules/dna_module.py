@@ -216,7 +216,7 @@ class DNAModule(GeneralModule):
                 xt = xt + flow * (t - s)
 
             elif args.flow_method == 'cdf_trick':
-                if (i + 1) < self.args.num_integration_step:
+                if (i + 1) < self.args.num_integration_steps:
                     eps = 10e-8
                     k = xt.size(-1)
                     # For each (b, n, i) we map the i-th coordinate of x_t[b, n].
