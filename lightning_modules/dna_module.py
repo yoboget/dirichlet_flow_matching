@@ -241,6 +241,7 @@ class DNAModule(GeneralModule):
                     x_next[:, :, diag_idx, diag_idx] = x_i_next
                     xt = (flow_probs.unsqueeze(-1) * x_next).sum(-2)
                 else:
+                    # Last step should predict the correct category
                     xt = flow_probs
             elif args.flow_method == 'unsid':
                 k = Categorical(flow_probs).sample().to(self.device)
