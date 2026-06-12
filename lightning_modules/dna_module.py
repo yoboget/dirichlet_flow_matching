@@ -216,30 +216,32 @@ class DNAModule(GeneralModule):
                 xt = xt + flow * (t - s)
 
             elif args.flow_method == 'cdf_trick':
-                eps = 10e-8
-                k = xt.size(-1)
-                # For each (b, n, i) we map the i-th coordinate of x_t[b, n].
-                # x_t itself, clamped, already gives every (b, i) value -- shape (B, n, k).
-                x_i_t = xt.clamp(min=eps, max=1.0 - eps)  # (B, n, k)
+                if (i + 1) < self.args.num_integration_step:
+                    eps = 10e-8
+                    k = xt.size(-1)
+                    # For each (b, n, i) we map the i-th coordinate of x_t[b, n].
+                    # x_t itself, clamped, already gives every (b, i) value -- shape (B, n, k).
+                    x_i_t = xt.clamp(min=eps, max=1.0 - eps)  # (B, n, k)
 
-                # u = beta_cdf(x_i_t, s, k - 1)
-                # x_i_next = beta_ppf(u, t, k - 1)  # (B, n, k)
-                u = self.beta.cdf(x_i_t, i)
-                x_i_next = self.beta.ppf(u, i+1)
+                    # u = beta_cdf(x_i_t, s, k - 1)
+                    # x_i_next = beta_ppf(u, t, k - 1)  # (B, n, k)
+                    u = self.beta.cdf(x_i_t, i)
+                    x_i_next = self.beta.ppf(u, i+1)
 
-                x_i_next = torch.as_tensor(x_i_next, dtype=x_i_t.dtype, device=x_i_t.device)#.clamp(eps, 1.0 - eps)
-                # scale[b, i] = (1 - x_i_next[b, i]) / (1 - x_t[b, i])
-                scale = (1.0 - x_i_next) / (1.0 - x_i_t)  # (B, n, k)
-                # scale = x_i_next / x_i_t
+                    x_i_next = torch.as_tensor(x_i_next, dtype=x_i_t.dtype, device=x_i_t.device)#.clamp(eps, 1.0 - eps)
+                    # scale[b, i] = (1 - x_i_next[b, i]) / (1 - x_t[b, i])
+                    scale = (1.0 - x_i_next) / (1.0 - x_i_t)  # (B, n, k)
+                    # scale = x_i_next / x_i_t
 
-                # Broadcast rescale: x_next[b, i, j] = x_t[b, j] * scale[b, i]
-                x_next = xt.unsqueeze(-2) * scale.unsqueeze(-1)  # (B, n, k, k)
-                # Overwrite the target coordinate (the diagonal in the last two axes):
-                # x_next[b, i, i] = x_i_next[b, i]
-                diag_idx = torch.arange(k, device=self.device)
-                x_next[:, :, diag_idx, diag_idx] = x_i_next
-                xt = (flow_probs.unsqueeze(-1) * x_next).sum(-2)
-
+                    # Broadcast rescale: x_next[b, i, j] = x_t[b, j] * scale[b, i]
+                    x_next = xt.unsqueeze(-2) * scale.unsqueeze(-1)  # (B, n, k, k)
+                    # Overwrite the target coordinate (the diagonal in the last two axes):
+                    # x_next[b, i, i] = x_i_next[b, i]
+                    diag_idx = torch.arange(k, device=self.device)
+                    x_next[:, :, diag_idx, diag_idx] = x_i_next
+                    xt = (flow_probs.unsqueeze(-1) * x_next).sum(-2)
+                else:
+                    xt = flow_probs
             elif args.flow_method == 'unsid':
                 k = Categorical(flow_probs).sample().to(self.device)
                 k_one_hot = F.one_hot(k, num_classes=flow_probs.size(-1)).to(self.device)
