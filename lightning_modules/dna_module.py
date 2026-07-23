@@ -18,7 +18,9 @@ from torch.distributions import Categorical, Dirichlet
 
 from model.dna_models import MLPModel, CNNModel, TransformerModel, DeepFlyBrainModel
 from utils.esm import upgrade_state_dict
-from utils.flow_utils import DirichletConditionalFlow, expand_simplex, sample_cond_prob_path, partial_resampling
+from utils.flow_utils import (DirichletConditionalFlow, expand_simplex, simplex_proj, get_wasserstein_dist, update_ema,
+                              sample_cond_prob_path, BetaTable, partial_resampling)
+
 from lightning_modules.general_module import GeneralModule
 from utils.logging import get_logger
 
