@@ -107,7 +107,7 @@ def parse_train_args():
 
     # Sampling
     parser.add_argument("--sampling_score", type=float, default=-1)
-    parser.add_argument("--flow_score", type=float, default=0.95)
+    parser.add_argument("--flow_score", type=float, default=1)
 
     # Logging
     parser.add_argument("--no_tqdm", action="store_true")
