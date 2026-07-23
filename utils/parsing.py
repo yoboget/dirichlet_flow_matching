@@ -15,7 +15,7 @@ def parse_train_args():
     parser.add_argument("--cls_ckpt_hparams", type=str, default=None)
     parser.add_argument("--clean_cls_ckpt", type=str, default=None, help='cls model for evaluation purposes')
     parser.add_argument("--clean_cls_ckpt_hparams", type=str, default=None)
-    parser.add_argument("--distill_ckpt", type=str, default=None, help='cls model for evaluation purposes ')
+    parser.add_argument("--distill_ckpt", type=str, default=None, help='cls model for evaluation purposes')
     parser.add_argument("--distill_ckpt_hparams", type=str, default=None)
     parser.add_argument("--ckpt_has_cls", action='store_true')
     parser.add_argument("--ckpt_has_clean_cls", action='store_true')
@@ -106,7 +106,7 @@ def parse_train_args():
     parser.add_argument('--num_integration_steps', type=int, default=100, help='The number of integration steps used during inference.')
 
     # Sampling
-    parser.add_argument("--sampling_score", type=float, default=10)
+    parser.add_argument("--sampling_score", type=float, default=1)
     parser.add_argument("--flow_score", type=float, default=1)
 
     # Logging
