@@ -101,7 +101,7 @@ def parse_train_args():
     parser.add_argument("--alpha_max", type=float, default=8, help='controls the maximum value until which we run the inference process. In equation 14, we write our probability path to go from alpha=1 to alpha=infinity. In practice we cut off alpha at alpha_max.')
     parser.add_argument("--cls_expanded_simplex", action="store_true")
     parser.add_argument("--simplex_encoding_dim", type=int, default=64)
-    parser.add_argument("--flow_temp", type=float, default=1.0)
+    parser.add_argument("--flow_temp", type=float, default=0.9)
     parser.add_argument('--val_pred_type', type=str, choices=['argmax', 'sample'], default='argmax')
     parser.add_argument('--num_integration_steps', type=int, default=100, help='The number of integration steps used during inference.')
 
