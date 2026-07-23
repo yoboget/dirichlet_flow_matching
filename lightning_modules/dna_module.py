@@ -273,11 +273,11 @@ class DNAModule(GeneralModule):
                     w = w.tril(-1) + w.tril(-1).transpose(2, 3)
                     xt = (w.unsqueeze(-1) * x_next).sum(dim=-2)
                 elif args.sampling_score == 0:
-                    b, n, _, k = flow_probs.size()
-                    a = Categorical(probs=flow_probs).sample().to(self.device)
+                    b, n, k = flow_probs.size()
+                    x = Categorical(probs=flow_probs).sample().to(self.device)
 
-                    xt = torch.gather(x_next, dim=3,
-                                       index=a.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, -1, -1, k)).squeeze(3)
+                    xt = torch.gather(x_next, dim=2,
+                                       index=x.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, -1, k)).squeeze(2)
 
                 else:
                     xt = (flow_probs.unsqueeze(-1) * x_next).sum(dim=-2)  #
