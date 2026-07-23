@@ -270,7 +270,7 @@ class DNAModule(GeneralModule):
                     eps = 1e-24
                     alphas = torch.clamp(flow_probs * args.sampling_score, min=eps)
                     w = Dirichlet(alphas).sample().to(self.device)  # (B,n,n,k)
-                    w = w.tril(-1) + w.tril(-1).transpose(2, 3)
+                    w = w.tril(-1) + w.tril(-1).transpose(1, 2)
                     xt = (w.unsqueeze(-1) * x_next).sum(dim=-2)
                 elif args.sampling_score == 0:
                     b, n, k = flow_probs.size()
