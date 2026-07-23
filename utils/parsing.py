@@ -106,7 +106,7 @@ def parse_train_args():
     parser.add_argument('--num_integration_steps', type=int, default=100, help='The number of integration steps used during inference.')
 
     # Sampling
-    parser.add_argument("--sampling_score", type=float, default=1)
+    parser.add_argument("--sampling_score", type=float, default=0.1)
     parser.add_argument("--flow_score", type=float, default=1)
 
     # Logging
