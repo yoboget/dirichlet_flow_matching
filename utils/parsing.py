@@ -15,7 +15,7 @@ def parse_train_args():
     parser.add_argument("--cls_ckpt_hparams", type=str, default=None)
     parser.add_argument("--clean_cls_ckpt", type=str, default=None, help='cls model for evaluation purposes')
     parser.add_argument("--clean_cls_ckpt_hparams", type=str, default=None)
-    parser.add_argument("--distill_ckpt", type=str, default=None, help='cls model for evaluation purposes')
+    parser.add_argument("--distill_ckpt", type=str, default=None, help='cls model for evaluation purposes ')
     parser.add_argument("--distill_ckpt_hparams", type=str, default=None)
     parser.add_argument("--ckpt_has_cls", action='store_true')
     parser.add_argument("--ckpt_has_clean_cls", action='store_true')
