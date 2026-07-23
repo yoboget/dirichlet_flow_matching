@@ -85,7 +85,7 @@ def parse_train_args():
     parser.add_argument("--clean_cls_model", choices=['mlp', 'cnn', 'transformer', 'deepflybrain'], default='cnn')
     parser.add_argument("--clean_data", action="store_true", help='do not noise to the model input. E.g. for training a clean calssifier.')
     parser.add_argument("--mode", choices=['distill', 'dirichlet', 'riemannian', 'mlm', 'ardm', 'lrar', 'cdcd', 'ppl_eval'], default='dirichlet')
-    parser.add_argument("--flow_method", choices=['original', 'cdf_trick', 'unsid', 'tuned'], default='unsid')
+    parser.add_argument("--flow_method", choices=['original', 'cdf_trick', 'unsid', 'tuned'], default='tuned')
     parser.add_argument("--simplex_spacing", type=int, default=1000, help='deprecated, has no influence')
     parser.add_argument("--prior_pseudocount", type=float, default=2, help='hyperparameter for expand_simplex function. Can be kept at 2 and should not matter much.')
     parser.add_argument("--dropout", type=float, default=0.0)
@@ -101,13 +101,13 @@ def parse_train_args():
     parser.add_argument("--alpha_max", type=float, default=8, help='controls the maximum value until which we run the inference process. In equation 14, we write our probability path to go from alpha=1 to alpha=infinity. In practice we cut off alpha at alpha_max.')
     parser.add_argument("--cls_expanded_simplex", action="store_true")
     parser.add_argument("--simplex_encoding_dim", type=int, default=64)
-    parser.add_argument("--flow_temp", type=float, default=0.4)
+    parser.add_argument("--flow_temp", type=float, default=1.0)
     parser.add_argument('--val_pred_type', type=str, choices=['argmax', 'sample'], default='argmax')
     parser.add_argument('--num_integration_steps', type=int, default=100, help='The number of integration steps used during inference.')
 
     # Sampling
-    parser.add_argument("--sampling_score", type=float, default=-1)
-    parser.add_argument("--flow_score", type=float, default=0.95)
+    parser.add_argument("--sampling_score", type=float, default=1000)
+    parser.add_argument("--flow_score", type=float, default=1)
 
     # Logging
     parser.add_argument("--no_tqdm", action="store_true")
