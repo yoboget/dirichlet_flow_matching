@@ -36,7 +36,7 @@ class DNAModule(GeneralModule):
         if args.flow_method == 'original':
             self.condflow = DirichletConditionalFlow(K=self.model.alphabet_size, alpha_spacing=0.001,
                                                      alpha_max=args.alpha_max)
-        elif args.flow_method == 'cdf_trick':
+        elif args.flow_method == 'cdf_trick' or args.flow_method == 'tuned':
             alphas =  torch.linspace(1, args.alpha_max, args.num_integration_steps).to(self.device)
             self.beta = BetaTable(alphas, k=self.model.alphabet_size, device=self.device, n_grid=8192)
 
@@ -264,7 +264,7 @@ class DNAModule(GeneralModule):
                 diag_idx = torch.arange(k, device=self.device)
                 x_next[:, :, diag_idx, diag_idx] = x_i_next
 
-                x_next = partial_resampling(x_next, t, self.flow_score)
+                x_next = partial_resampling(x_next, t, args.flow_score)
 
                 if args.sampling_score > 0:
                     eps = 1e-24
