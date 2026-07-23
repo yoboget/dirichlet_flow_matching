@@ -18,8 +18,7 @@ from torch.distributions import Categorical, Dirichlet
 
 from model.dna_models import MLPModel, CNNModel, TransformerModel, DeepFlyBrainModel
 from utils.esm import upgrade_state_dict
-from utils.flow_utils import DirichletConditionalFlow, expand_simplex, sample_cond_prob_path, simplex_proj, \
-    get_wasserstein_dist, update_ema, load_flybrain_designed_seqs, beta_ppf, beta_cdf, BetaTable
+from utils.flow_utils import DirichletConditionalFlow, expand_simplex, sample_cond_prob_path, partial_resampling
 from lightning_modules.general_module import GeneralModule
 from utils.logging import get_logger
 
@@ -248,7 +247,38 @@ class DNAModule(GeneralModule):
                 k_one_hot = F.one_hot(k, num_classes=flow_probs.size(-1)).to(self.device)
                 alpha = 1 + (t - 1) * k_one_hot
                 xt = Dirichlet(alpha).sample().to(self.device)
+            elif args.flow_method == 'tuned':
+                eps = 10e-15
+                k = xt.size(-1)
+                x_i_t = xt.clamp(min=eps, max=1.0 - eps)  # (B, n, k)
 
+                u = self.beta.cdf(x_i_t, i)
+                x_i_next = self.beta.ppf(u, i + 1)
+
+                x_i_next = torch.as_tensor(x_i_next, dtype=x_i_t.dtype, device=x_i_t.device)  # .clamp(eps, 1.0 - eps)
+                scale = (1.0 - x_i_next) / (1.0 - x_i_t)
+                x_next = xt.unsqueeze(-2) * scale.unsqueeze(-1)  # (B, n, k, k)
+
+                diag_idx = torch.arange(k, device=self.device)
+                x_next[:, :, diag_idx, diag_idx] = x_i_next
+
+                x_next = partial_resampling(x_next, t, self.flow_score)
+
+                if args.sampling_score > 0:
+                    eps = 1e-24
+                    alphas = torch.clamp(flow_probs * args.sampling_score, min=eps)
+                    w = Dirichlet(alphas).sample().to(self.device)  # (B,n,n,k)
+                    w = w.tril(-1) + w.tril(-1).transpose(2, 3)
+                    xt = (w.unsqueeze(-1) * x_next).sum(dim=-2)
+                elif args.sampling_score == 0:
+                    b, n, _, k = flow_probs.size()
+                    a = Categorical(probs=flow_probs).sample().to(self.device)
+
+                    xt = torch.gather(x_next, dim=3,
+                                       index=a.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, -1, -1, k)).squeeze(3)
+
+                else:
+                    xt = (flow_probs.unsqueeze(-1) * x_next).sum(dim=-2)  #
 
             if not torch.allclose(xt.sum(2), torch.ones((B, L), device=self.device), atol=1e-4) or not (xt >= 0).all():
                 print(f'WARNING: xt.min(): {xt.min()}. Some values of xt do not lie on the simplex. There are we are {(xt<0).sum()} negative values in xt of shape {xt.shape} that are negative. We are projecting them onto the simplex.')

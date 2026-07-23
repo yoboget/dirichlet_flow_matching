@@ -1,6 +1,7 @@
 import copy
 import math
 import pickle
+from typing import Union
 
 import scipy
 import torch.nn.functional as F
@@ -8,7 +9,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 from scipy.linalg import sqrtm
-from scipy.stats import beta as scipy_beta
+
+from torch.distributions.dirichlet import Dirichlet
+from torch.distributions.gamma import Gamma
+from torch.distributions.beta import Beta
 
 
 def load_flybrain_designed_seqs(path):
@@ -609,3 +613,40 @@ class BetaTable:
         ys = self.u_grid  # (G,) -- and these are the ordinates
         return self._interp1d(x, xs, ys)
 
+def partial_resampling(
+        x: torch.Tensor,  # (..., K) points on the simplex
+        alpha: float,  # (..., K) target Dirichlet concentration, > 0
+        rho: Union[float, torch.Tensor],  # scalar or (..., 1)-broadcastable, in [0, 1]
+        eps: float = 1e-38,
+    ) -> torch.Tensor:
+    """Apply M_rho targeting Dir(alpha). Differentiable via rsample
+    (reparameterized w.r.t. y and alpha; pathwise w.r.t. rho as well,
+    since rho only enters through Beta/Gamma concentrations)."""
+    rho = torch.as_tensor(rho, dtype=x.dtype, device=x.device)
+    alpha = torch.tensor(alpha, device=x.device, dtype=x.dtype)
+    k = x.size(-1)
+    alphas = torch.ones_like(x)
+    diag_idx = torch.arange(k, device=x.device)
+    alphas[..., diag_idx, diag_idx] = alpha
+    # Endpoint shortcuts: Beta/Gamma concentrations degenerate at 0.
+    if rho.numel() == 1:
+        if rho.item() >= 1.0:
+            return x
+        if rho.item() <= 0.0:
+            return Dirichlet(alphas).sample()
+
+    # 1. Gamma lift. sum over last dim; one total per batch element.
+    A = alphas.sum(dim=-1, keepdim=True)
+    S = Gamma(A, torch.ones_like(A)).sample()
+    G = S * x
+
+    # 2. Beta thinning + 3. replenishment, coordinatewise.
+    a_keep = rho * alphas
+    a_new = (1.0 - rho) * alphas
+    B = Beta(a_keep, a_new).sample()
+    E = Gamma(a_new, torch.ones_like(a_new)).sample()
+    G_new = B * G + E
+
+    # 4. Back to the simplex.
+    G_new = G_new / G_new.sum(dim=-1, keepdim=True)
+    return G_new
