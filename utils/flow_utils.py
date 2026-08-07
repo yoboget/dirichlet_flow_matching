@@ -617,16 +617,16 @@ def partial_resampling(
         x: torch.Tensor,  # (..., K) points on the simplex
         alpha: float,  # (..., K) target Dirichlet concentration, > 0
         rho: Union[float, torch.Tensor],  # scalar or (..., 1)-broadcastable, in [0, 1]
-        eps: float = 1e-38,
     ) -> torch.Tensor:
-    """Apply M_rho targeting Dir(alpha). Differentiable via rsample
+    """Apply M_rho targeting Dir(alpha).
     (reparameterized w.r.t. y and alpha; pathwise w.r.t. rho as well,
     since rho only enters through Beta/Gamma concentrations)."""
     rho = torch.as_tensor(rho, dtype=x.dtype, device=x.device)
-    alpha = torch.tensor(alpha, device=x.device, dtype=x.dtype)
+    alpha = torch.as_tensor(alpha, device=x.device, dtype=x.dtype)
     k = x.size(-1)
     alphas = torch.ones_like(x)
     diag_idx = torch.arange(k, device=x.device)
+    print(alpha)
     alphas[..., diag_idx, diag_idx] = alpha
     # Endpoint shortcuts: Beta/Gamma concentrations degenerate at 0.
     if rho.numel() == 1:
