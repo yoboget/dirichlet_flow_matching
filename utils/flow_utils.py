@@ -626,7 +626,6 @@ def partial_resampling(
     k = x.size(-1)
     alphas = torch.ones_like(x)
     diag_idx = torch.arange(k, device=x.device)
-    print(alpha)
     alphas[..., diag_idx, diag_idx] = alpha
     # Endpoint shortcuts: Beta/Gamma concentrations degenerate at 0.
     if rho.numel() == 1:
