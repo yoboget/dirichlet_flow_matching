@@ -109,7 +109,7 @@ def parse_train_args():
     parser.add_argument("--sampling_score", type=float, default=0,
                         help='Score btw averaging (0) across conditional flow or sampling (+inf, coded -1)')
     parser.add_argument("--flow_score", type=float, default=0,
-                        help = '0 = Flow: deterministic, 0 = complete resampling')
+                        help = '1 = Flow: deterministic, 0 = complete resampling')
 
     # Logging
     parser.add_argument("--no_tqdm", action="store_true")

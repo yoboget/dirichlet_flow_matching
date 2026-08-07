@@ -16,7 +16,7 @@ if args.wandb:
     wandb.init(
         # entity="anonymized",
         settings=wandb.Settings(start_method="fork"),
-        project=f"DNA",
+        project=f"{args.run_name}",
         name=f'{args.mode}_{args.flow_method}_{args.run_name}',
         config=args,
     )
