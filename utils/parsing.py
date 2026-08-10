@@ -103,7 +103,7 @@ def parse_train_args():
     parser.add_argument("--simplex_encoding_dim", type=int, default=64)
     parser.add_argument("--flow_temp", type=float, default=1.0)
     parser.add_argument('--val_pred_type', type=str, choices=['argmax', 'sample'], default='argmax')
-    parser.add_argument('--num_integration_steps', type=int, default=50, help='The number of integration steps used during inference.')
+    parser.add_argument('--num_integration_steps', type=int, default=200, help='The number of integration steps used during inference.')
 
     # Sampling
     parser.add_argument("--sampling_score", type=float, default=-1,
