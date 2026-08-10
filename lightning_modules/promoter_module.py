@@ -244,14 +244,14 @@ class PromoterModule(GeneralModule):
                     w = Dirichlet(alphas).sample().to(self.device)  # (B,n,n,k)
                     xt = (w.unsqueeze(-1) * x_next).sum(dim=-2)
                 elif args.sampling_score == 0:
-                    b, n, k = flow_probs.size()
+                    b, n, k = out_probs.size()
                     x = Categorical(probs=out_probs).sample().to(self.device)
 
                     xt = torch.gather(x_next, dim=2,
                                        index=x.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, -1, k)).squeeze(2)
 
                 else:
-                    xt = (flow_probs.unsqueeze(-1) * x_next).sum(dim=-2)  #
+                    xt = (out_probs.unsqueeze(-1) * x_next).sum(dim=-2)  #
 
             if not torch.allclose(xt.sum(2), torch.ones((B, L), device=self.device), atol=1e-4) or not (xt >= 0).all():
                 print(f'WARNING: xt.min(): {xt.min()}. Some values of xt do not lie on the simplex. There are we are {(xt<0).sum()} negative values in xt of shape {xt.shape} that are negative.')
