@@ -215,6 +215,38 @@ class PromoterModule(GeneralModule):
                     print(alpha[0, 0])
                     xt = Dirichlet(alpha).sample().to(self.device)
 
+            elif args.flow_method == 'tuned':
+                eps = 10e-15
+                k = xt.size(-1)
+                x_i_t = xt.clamp(min=eps, max=1.0 - eps)  # (B, n, k)
+
+                u = self.beta.cdf(x_i_t, i)
+                x_i_next = self.beta.ppf(u, i + 1)
+
+                x_i_next = torch.as_tensor(x_i_next, dtype=x_i_t.dtype, device=x_i_t.device)  # .clamp(eps, 1.0 - eps)
+                scale = (1.0 - x_i_next) / (1.0 - x_i_t)
+                x_next = xt.unsqueeze(-2) * scale.unsqueeze(-1)  # (B, n, k, k)
+
+                diag_idx = torch.arange(k, device=self.device)
+                x_next[:, :, diag_idx, diag_idx] = x_i_next
+
+                x_next = partial_resampling(x_next, t, args.flow_score)
+
+                if args.sampling_score > 0:
+                    eps = 1e-24
+                    alphas = torch.clamp(flow_probs * args.sampling_score, min=eps)
+                    w = Dirichlet(alphas).sample().to(self.device)  # (B,n,n,k)
+                    xt = (w.unsqueeze(-1) * x_next).sum(dim=-2)
+                elif args.sampling_score == 0:
+                    b, n, k = flow_probs.size()
+                    x = Categorical(probs=flow_probs).sample().to(self.device)
+
+                    xt = torch.gather(x_next, dim=2,
+                                       index=x.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, -1, k)).squeeze(2)
+
+                else:
+                    xt = (flow_probs.unsqueeze(-1) * x_next).sum(dim=-2)  #
+
             if not torch.allclose(xt.sum(2), torch.ones((B, L), device=self.device), atol=1e-4) or not (xt >= 0).all():
                 print(f'WARNING: xt.min(): {xt.min()}. Some values of xt do not lie on the simplex. There are we are {(xt<0).sum()} negative values in xt of shape {xt.shape} that are negative.')
                 xt = simplex_proj(xt)
