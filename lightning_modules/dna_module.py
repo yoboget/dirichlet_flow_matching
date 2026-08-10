@@ -165,8 +165,6 @@ class DNAModule(GeneralModule):
                 if self.args.score_free_guidance:
                     flow_probs = probs_cond
                 else:
-                    print((torch.ones(B, device=self.device) * model.num_cls))
-                    print((torch.ones(B, device=self.device) * model.num_cls).shape)
                     logits_uncond = model(xt_expanded, t=s[None].expand(B), cls=(torch.ones(B, device=self.device) * model.num_cls).long())
                     probs_unccond = torch.nn.functional.softmax(logits_uncond / args.flow_temp, -1)  # [B, L, K]
                     if self.args.probability_tilt:
