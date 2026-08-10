@@ -85,7 +85,7 @@ def parse_train_args():
     parser.add_argument("--clean_cls_model", choices=['mlp', 'cnn', 'transformer', 'deepflybrain'], default='cnn')
     parser.add_argument("--clean_data", action="store_true", help='do not noise to the model input. E.g. for training a clean calssifier.')
     parser.add_argument("--mode", choices=['distill', 'dirichlet', 'riemannian', 'mlm', 'ardm', 'lrar', 'cdcd', 'ppl_eval'], default='dirichlet')
-    parser.add_argument("--flow_method", choices=['original', 'cdf_trick', 'unsid', 'tuned'], default='original')
+    parser.add_argument("--flow_method", choices=['original', 'cdf_trick', 'unsid', 'tuned'], default='tuned')
     parser.add_argument("--simplex_spacing", type=int, default=1000, help='deprecated, has no influence')
     parser.add_argument("--prior_pseudocount", type=float, default=2, help='hyperparameter for expand_simplex function. Can be kept at 2 and should not matter much.')
     parser.add_argument("--dropout", type=float, default=0.0)
@@ -108,7 +108,7 @@ def parse_train_args():
     # Sampling
     parser.add_argument("--sampling_score", type=float, default=0,
                         help='Score btw averaging (0) across conditional flow or sampling (+inf, coded -1)')
-    parser.add_argument("--flow_score", type=float, default=1,
+    parser.add_argument("--flow_score", type=float, default=0.95,
                         help = '1 = Flow: deterministic, 0 = complete resampling')
 
     # Logging
