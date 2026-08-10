@@ -74,7 +74,7 @@ def parse_train_args():
     parser.add_argument("--vectorfield_addition", action='store_true', help='if this is activated then cls_free_guidance also needs to be activated and we then do it with probs tilting instead of with score conversion')
     parser.add_argument("--probability_tilt", action='store_true', help='if this is activated then cls_free_guidance also needs to be activated and we then do it with probs tilting instead of with score conversion')
     parser.add_argument("--score_free_guidance", action='store_true')
-    parser.add_argument("--guidance_scale", type=float, default=2)
+    parser.add_argument("--guidance_scale", type=float, default=0)
     parser.add_argument("--analytic_cls_score", action='store_true', help='this only works with the two_class_dataset')
     parser.add_argument("--scale_cls_score", action='store_true')
     parser.add_argument("--allow_nan_cfactor", action="store_true")
