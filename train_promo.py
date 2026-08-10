@@ -18,8 +18,8 @@ torch.cuda.set_device(0)
 if args.wandb:
     wandb.init(
         settings=wandb.Settings(start_method="fork"),
-        project="betawolf",
-        name=args.run_name,
+        project="Promoter",
+        name=f'{args.flow_method}_{args.run_name}_{args.alpha_max}',
         config=args,
         mode='online'
     )
