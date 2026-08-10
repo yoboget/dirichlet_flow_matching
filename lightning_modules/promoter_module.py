@@ -12,7 +12,9 @@ import torch.nn.functional as F
 from torch.distributions import Categorical, Dirichlet
 
 from utils.esm import upgrade_state_dict
-from utils.flow_utils import DirichletConditionalFlow, expand_simplex, sample_cond_prob_path, simplex_proj, beta_cdf, beta_ppf
+from utils.flow_utils import (DirichletConditionalFlow, expand_simplex, simplex_proj, get_wasserstein_dist, update_ema,
+                              sample_cond_prob_path, BetaTable, partial_resampling)
+
 from lightning_modules.general_module import GeneralModule
 from utils.logging import get_logger
 from model.promoter_model import PromoterModel
@@ -27,6 +29,10 @@ class PromoterModule(GeneralModule):
 
         self.model = PromoterModel(args)
         self.condflow = DirichletConditionalFlow(K=self.model.alphabet_size, alpha_spacing=0.01, alpha_max=args.alpha_max)
+
+        if args.flow_method == 'cdf_trick' or args.flow_method == 'tuned':
+            alphas =  torch.linspace(1, args.alpha_max, args.num_integration_steps).to(self.device)
+            self.beta = BetaTable(alphas, k=self.model.alphabet_size, device=self.device, n_grid=8192)
 
         self.seifeatures = pd.read_csv('data/promoter_design/target.sei.names', sep='|', header=None)
         self.sei_cache = {}
@@ -186,8 +192,9 @@ class PromoterModule(GeneralModule):
                 # x_t itself, clamped, already gives every (b, i) value -- shape (B, n, k).
                 x_i_t = xt.clamp(min=eps, max=1.0 - eps)  # (B, n, k)
 
-                u = beta_cdf(x_i_t, s, k - 1)#.clamp(eps, 1.0 - eps)  # (B, n, k)
-                x_i_next = beta_ppf(u, t, k - 1)  # (B, n, k)
+                u = self.beta.cdf(x_i_t, i)#.clamp(eps, 1.0 - eps)  # (B, n, k)
+                x_i_next = self.beta.ppf(u, i + 1)  # (B, n, k)
+
                 x_i_next = torch.as_tensor(x_i_next, dtype=x_i_t.dtype, device=x_i_t.device).clamp(eps, 1.0 - eps)
                 # scale[b, i] = (1 - x_i_next[b, i]) / (1 - x_t[b, i])
                 scale = (1.0 - x_i_next) / (1.0 - x_i_t)  # (B, n, k)
