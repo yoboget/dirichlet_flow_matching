@@ -572,7 +572,9 @@ class DNAModule(GeneralModule):
             axes[row, col].set_ylabel('Density')
         plt.tight_layout()
         fig.canvas.draw()
-        pil_img = PIL.Image.frombytes('RGB', fig.canvas.get_width_height(), fig.canvas.tobytes_srgb())
+        rgba_array = np.asarray(fig.canvas.buffer_rgba())
+        pil_img = PIL.Image.fromarray(rgba_array).convert('RGB')
+        # pil_img = PIL.Image.frombytes('RGB', fig.canvas.get_width_height(), fig.canvas.tostring_rgb())
         plt.close()
         return pil_img
 
