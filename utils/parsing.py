@@ -103,13 +103,13 @@ def parse_train_args():
     parser.add_argument("--simplex_encoding_dim", type=int, default=64)
     parser.add_argument("--flow_temp", type=float, default=1.0)
     parser.add_argument('--val_pred_type', type=str, choices=['argmax', 'sample'], default='argmax')
-    parser.add_argument('--num_integration_steps', type=int, default=50, help='The number of integration steps used during inference.')
+    parser.add_argument('--num_integration_steps', type=int, default=100, help='The number of integration steps used during inference.')
 
     # Sampling
-    parser.add_argument("--sampling_score", type=float, default=0,
-                        help='Score btw averaging (0) across conditional flow or sampling (+inf, coded -1)')
-    parser.add_argument("--flow_score", type=float, default=1,
-                        help = '1 = Flow: deterministic, 0 = complete resampling')
+    parser.add_argument("--sampling_score", type=float, default=-1,
+                        help='Score btw averaging (0) across conditional flow or sampling one (+inf, coded -1)')
+    parser.add_argument("--flow_score", type=float, default=0.95,
+                        help = 'How to get the conditional x_{t+h}|x_1: 1 = Flow: deterministic, 0 = complete resampling')
 
     # Logging
     parser.add_argument("--no_tqdm", action="store_true")
