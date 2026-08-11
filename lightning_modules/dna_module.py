@@ -104,7 +104,7 @@ class DNAModule(GeneralModule):
 
         self.lg('loss', losses)
         self.lg('perplexity', torch.exp(losses.mean())[None].expand(B))
-        if self.stage == "val":
+        if self.stage == "val" and not self.args.skip_val_sampling:
             if self.args.mode == 'dirichlet':
                 logits_pred, _ = self.dirichlet_flow_inference(seq, cls, model=self.model, args=self.args)
                 seq_pred = torch.argmax(logits_pred, dim=-1)
@@ -454,7 +454,7 @@ class DNAModule(GeneralModule):
         mean_log.update({'val_nan_inf_step_fraction': self.nan_inf_counter / self.inf_counter})
 
         mean_log.update({'epoch': float(self.trainer.current_epoch), 'step': float(self.trainer.global_step), 'iter_step': float(self.iter_step)})
-        if self.args.dataset_type == 'toy_sampled':
+        if self.args.dataset_type == 'toy_sampled' and not self.args.skip_val_sampling:
             all_seqs = torch.cat(self.val_outputs['seqs'], dim=0).cpu()
             all_seqs_one_hot = torch.nn.functional.one_hot(all_seqs, num_classes=self.args.toy_simplex_dim)
             counts = all_seqs_one_hot.sum(0).float()
@@ -498,7 +498,7 @@ class DNAModule(GeneralModule):
             self.log_dict(mean_log, batch_size=1)
             if self.args.wandb:
                 wandb.log(mean_log)
-                if self.args.dataset_type == 'toy_sampled':
+                if self.args.dataset_type == 'toy_sampled' and not self.args.skip_val_sampling:
                     pil_dist_comp = self.plot_empirical_and_true(empirical_dist, self.toy_data.probs[self.args.target_class])
                     wandb.log({'fig': [wandb.Image(pil_dist_comp)], 'step': float(self.trainer.global_step), 'iter_step': float(self.iter_step)})
                 if self.args.cls_ckpt is not None:
