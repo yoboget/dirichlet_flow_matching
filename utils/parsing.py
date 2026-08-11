@@ -108,7 +108,7 @@ def parse_train_args():
     # Sampling
     parser.add_argument("--sampling_score", type=float, default=-1,
                         help='Score btw averaging (0) across conditional flow or sampling one (+inf, coded -1)')
-    parser.add_argument("--flow_score", type=float, default=0.05,
+    parser.add_argument("--flow_score", type=float, default=0.75,
                         help = 'How to get the conditional x_{t+h}|x_1: 1 = Flow: deterministic, 0 = complete resampling')
 
     # Logging
