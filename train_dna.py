@@ -11,6 +11,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 torch.serialization.add_safe_globals([argparse.Namespace])
+torch.serialization.add_safe_globals([ToyDataset])
 
 if args.wandb:
     wandb.init(
