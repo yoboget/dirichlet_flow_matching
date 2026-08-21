@@ -6,19 +6,21 @@ from utils.parsing import parse_train_args
 args = parse_train_args()
 import argparse
 import torch, os, wandb
-torch.manual_seed(0)
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 torch.serialization.add_safe_globals([argparse.Namespace])
 torch.serialization.add_safe_globals([ToyDataset])
 
+pl.seed_everything(args.seed, workers=True)
+
 if args.wandb:
     wandb.init(
         # entity="anonymized",
         settings=wandb.Settings(start_method="fork"),
         project=f"{args.run_name}",
-        name=f'{args.mode}_{args.flow_method}_{args.run_name}',
+        name=f'{args.flow_method}_{args.alpha_max}_{args.sampling_score}_{args.flow_score}_seed{args.seed}',
+        group=f'{args.flow_method}_{args.alpha_max}_{args.sampling_score}_{args.flow_score}',
         config=args,
     )
 

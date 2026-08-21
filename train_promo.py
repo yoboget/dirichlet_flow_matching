@@ -19,7 +19,8 @@ if args.wandb:
     wandb.init(
         settings=wandb.Settings(start_method="fork"),
         project="Promoter",
-        name=f'{args.flow_method}_{args.run_name}_{args.alpha_max}',
+        name=f'{args.flow_method}_{args.alpha_max}_{args.sampling_score}_{args.flow_score}_seed{args.seed}',
+        group=f'{args.flow_method}_{args.alpha_max}_{args.sampling_score}_{args.flow_score}',
         config=args,
         mode='online'
     )

@@ -118,10 +118,11 @@ def parse_train_args():
     parser.add_argument("--print_freq", type=int, default=10)
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--run_name", type=str, default="default")
-    
+    parser.add_argument("--seed", type=int, default=42, help='seed for torch/numpy/python RNGs and dataloader workers, so multiple runs with different seeds can be compared for variance in the metrics.')
+
     args = parser.parse_args()
     timestamp = datetime.fromtimestamp(datetime.now().timestamp()).strftime("%Y-%m-%d_%H-%M-%S")
-    os.environ["MODEL_DIR"] = os.path.join("workdir", (args.run_name + '_' + timestamp))
+    os.environ["MODEL_DIR"] = os.path.join("workdir", (args.run_name + f'_seed{args.seed}' + '_' + timestamp))
     os.environ["WANDB_LOGGING"] = str(int(args.wandb))
 
     from utils.logging import Logger
