@@ -94,19 +94,20 @@ class PromoterModule(GeneralModule):
         self.lg('dur', torch.tensor(time.time() - self.last_log_time)[None].expand(B))
         if self.stage == "val":
 
-            if self.args.mode == 'dirichlet':
-                logits_pred, _ = self.dirichlet_flow_inference(seq, signal, self.model, args=self.args)
-                seq_pred = torch.argmax(logits_pred, dim=-1)
-            elif self.args.mode == 'riemannian':
-                logits_pred = self.riemannian_flow_inference(seq, signal)
-                seq_pred = torch.argmax(logits_pred, dim=-1)
-            elif self.args.mode == 'ardm' or self.args.mode == 'lrar':
-                seq_pred = self.ar_inference(seq, signal)
-            elif self.args.mode == 'distill':
-                logits_pred = self.distill_inference(seq, signal)
-                seq_pred = torch.argmax(logits_pred, dim=-1)
-            else:
-                raise NotImplementedError()
+            with self.time_sampling(B):
+                if self.args.mode == 'dirichlet':
+                    logits_pred, _ = self.dirichlet_flow_inference(seq, signal, self.model, args=self.args)
+                    seq_pred = torch.argmax(logits_pred, dim=-1)
+                elif self.args.mode == 'riemannian':
+                    logits_pred = self.riemannian_flow_inference(seq, signal)
+                    seq_pred = torch.argmax(logits_pred, dim=-1)
+                elif self.args.mode == 'ardm' or self.args.mode == 'lrar':
+                    seq_pred = self.ar_inference(seq, signal)
+                elif self.args.mode == 'distill':
+                    logits_pred = self.distill_inference(seq, signal)
+                    seq_pred = torch.argmax(logits_pred, dim=-1)
+                else:
+                    raise NotImplementedError()
             self.lg('seq', [''.join([['A','C','G','T'][num] for num in seq]) for seq in seq_pred])
             seq_pred_one_hot = torch.nn.functional.one_hot(seq_pred, num_classes=self.model.alphabet_size).float()
 

@@ -105,19 +105,20 @@ class DNAModule(GeneralModule):
         self.lg('loss', losses)
         self.lg('perplexity', torch.exp(losses.mean())[None].expand(B))
         if self.stage == "val" and not self.args.skip_val_sampling:
-            if self.args.mode == 'dirichlet':
-                logits_pred, _ = self.dirichlet_flow_inference(seq, cls, model=self.model, args=self.args)
-                seq_pred = torch.argmax(logits_pred, dim=-1)
-            elif self.args.mode == 'riemannian':
-                logits_pred = self.riemannian_flow_inference(seq)
-                seq_pred = torch.argmax(logits_pred, dim=-1)
-            elif self.args.mode == 'ardm' or self.args.mode == 'lrar':
-                seq_pred = self.ar_inference(seq)
-            elif self.args.mode == 'distill':
-                logits_pred = self.distill_inference(seq)
-                seq_pred = torch.argmax(logits_pred, dim=-1)
-            else:
-                raise NotImplementedError()
+            with self.time_sampling(B):
+                if self.args.mode == 'dirichlet':
+                    logits_pred, _ = self.dirichlet_flow_inference(seq, cls, model=self.model, args=self.args)
+                    seq_pred = torch.argmax(logits_pred, dim=-1)
+                elif self.args.mode == 'riemannian':
+                    logits_pred = self.riemannian_flow_inference(seq)
+                    seq_pred = torch.argmax(logits_pred, dim=-1)
+                elif self.args.mode == 'ardm' or self.args.mode == 'lrar':
+                    seq_pred = self.ar_inference(seq)
+                elif self.args.mode == 'distill':
+                    logits_pred = self.distill_inference(seq)
+                    seq_pred = torch.argmax(logits_pred, dim=-1)
+                else:
+                    raise NotImplementedError()
 
             self.lg('seq', [''.join([['A','C','G','T'][num] if self.model.alphabet_size == 4 else str(num) for num in seq]) for seq in seq_pred])
             self.lg('recovery', seq_pred.eq(seq).float().mean(-1))

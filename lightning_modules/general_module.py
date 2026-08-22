@@ -1,3 +1,4 @@
+import contextlib
 import os
 
 import pandas as pd
@@ -24,7 +25,24 @@ class GeneralModule(pl.LightningModule):
         self._log = defaultdict(list)
         self.generator = np.random.default_rng()
         self.last_log_time = time.time()
+        self.total_sampling_time = 0.0
 
+    @contextlib.contextmanager
+    def time_sampling(self, batch_size):
+        """Times a block that generates samples (e.g. the flow-matching inference loop) and
+        accumulates it into self.total_sampling_time, so the total time spent sampling over the
+        whole run can be compared across experiments/seeds (see on_fit_end)."""
+        start = time.time()
+        yield
+        dt = time.time() - start
+        self.total_sampling_time += dt
+        self.lg('sampling_time', torch.tensor(dt)[None].expand(batch_size))
+
+    def on_fit_end(self):
+        if self.trainer.is_global_zero:
+            logger.info(f'Total sampling time: {self.total_sampling_time:.2f}s')
+            if self.args.wandb:
+                wandb.run.summary['total_sampling_time'] = self.total_sampling_time
 
     def try_print_log(self):
 
@@ -80,13 +98,15 @@ class GeneralModule(pl.LightningModule):
         log = self.gather_log(log, self.trainer.world_size)
         mean_log = self.get_log_mean(log)
         mean_log.update(
-            {'epoch': float(self.trainer.current_epoch), 'step': float(self.trainer.global_step), 'iter_step': float(self.iter_step)})
+            {'epoch': float(self.trainer.current_epoch), 'step': float(self.trainer.global_step), 'iter_step': float(self.iter_step),
+             'val_total_sampling_time': self.total_sampling_time})
 
         if self.trainer.is_global_zero:
             logger.info(str(mean_log))
             self.log_dict(mean_log, batch_size=1)
             if self.args.wandb:
                 wandb.log(mean_log)
+                wandb.run.summary['total_sampling_time'] = self.total_sampling_time
 
             path = os.path.join(
                 os.environ["MODEL_DIR"], f"val_{self.trainer.global_step}.csv"
