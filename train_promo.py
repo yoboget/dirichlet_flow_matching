@@ -15,6 +15,8 @@ print("Torch cuda version:", torch.version.cuda)
 torch.cuda.init()
 torch.cuda.set_device(0)
 
+pl.seed_everything(args.seed, workers=True)
+
 if args.wandb:
     wandb.init(
         settings=wandb.Settings(start_method="fork"),
