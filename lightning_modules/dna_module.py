@@ -38,7 +38,7 @@ class DNAModule(GeneralModule):
                                                      alpha_max=args.alpha_max)
         elif args.flow_method == 'cdf_trick' or args.flow_method == 'tuned':
             alphas =  torch.linspace(1, args.alpha_max, args.num_integration_steps).to(self.device)
-            self.beta = BetaTable(alphas, k=self.model.alphabet_size, device=self.device, n_grid=8192)
+            self.beta = BetaTable(alphas, k=self.model.alphabet_size, device=self.device, n_grid=1024)
 
         self.crossent_loss = torch.nn.CrossEntropyLoss(reduction='none')
 
