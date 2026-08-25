@@ -32,7 +32,7 @@ class PromoterModule(GeneralModule):
 
         if args.flow_method == 'cdf_trick' or args.flow_method == 'tuned':
             alphas =  torch.linspace(1, args.alpha_max, args.num_integration_steps).to(self.device)
-            self.beta = BetaTable(alphas, k=self.model.alphabet_size, device=self.device, n_grid=8192)
+            self.beta = BetaTable(alphas, k=self.model.alphabet_size, device=self.device, n_grid=1024)
 
         self.seifeatures = pd.read_csv('data/promoter_design/target.sei.names', sep='|', header=None)
         self.sei_cache = {}
