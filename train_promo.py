@@ -41,11 +41,21 @@ trainer = pl.Trainer(
     callbacks=[
         ModelCheckpoint(
             dirpath=os.environ["MODEL_DIR"],
-            save_top_k=1,
+            filename='fid-{epoch}-{step}' if args.fid_early_stop else '{epoch}-{step}',
+            save_top_k=5 if args.fid_early_stop else 1,
             save_last=True,
-            monitor='val_sp-mse'
-        )
-    ],
+            monitor='val_sp-mse',
+            mode="min",
+        ),
+    ] + ([
+        ModelCheckpoint(
+            dirpath=os.environ["MODEL_DIR"],
+            filename='perplexity-{epoch}-{step}',
+            save_top_k=5,
+            monitor='val_perplexity',
+            mode="min",
+        ),
+    ] if args.fid_early_stop else []),
     check_val_every_n_epoch=args.check_val_every_n_epoch,
 )
 
