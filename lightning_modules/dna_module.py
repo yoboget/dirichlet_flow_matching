@@ -473,12 +473,17 @@ class DNAModule(GeneralModule):
             # calculate FID/FXD metrics:
             embeds_gen = torch.cat(self.val_outputs['embeddings_cleancls_generated']).detach().cpu().numpy()
             if not self.args.validate:
-                train_clss = torch.cat(self.train_outputs['clss_cleancls']).squeeze().detach().cpu().numpy()
-                train_embeds = torch.cat(self.train_outputs['embeddings_cleancls']).detach().cpu().numpy()
-                mean_log.update({'val_fxd_generated_to_allseqs_allTrainSet': get_wasserstein_dist(embeds_gen, train_embeds)})
-                if not self.args.target_class == self.model.num_cls:
-                    embeds_cls_specific = train_embeds[train_clss == self.args.target_class]
-                    mean_log.update({'val_fxd_generated_to_targetclsseqs_allTrainSet': get_wasserstein_dist(embeds_gen, embeds_cls_specific)})
+                if self.train_outputs['clss_cleancls'] and self.train_outputs['embeddings_cleancls']:
+                    train_clss = torch.cat(self.train_outputs['clss_cleancls']).squeeze().detach().cpu().numpy()
+                    train_embeds = torch.cat(self.train_outputs['embeddings_cleancls']).detach().cpu().numpy()
+                    mean_log.update({'val_fxd_generated_to_allseqs_allTrainSet': get_wasserstein_dist(embeds_gen, train_embeds)})
+                    if not self.args.target_class == self.model.num_cls:
+                        embeds_cls_specific = train_embeds[train_clss == self.args.target_class]
+                        mean_log.update({'val_fxd_generated_to_targetclsseqs_allTrainSet': get_wasserstein_dist(embeds_gen, embeds_cls_specific)})
+                else:
+                    # Can be empty right after resuming from a checkpoint, if validation is
+                    # triggered before any training_step has run in this process.
+                    logger.warning('train_outputs is empty, skipping *_allTrainSet FID metrics for this validation round.')
             clss = torch.cat(self.val_outputs['clss_cleancls']).squeeze().detach().cpu().numpy()
             embeds = torch.cat(self.val_outputs['embeddings_cleancls']).detach().cpu().numpy()
             embeds_rand = torch.randint(0,4, size=embeds_gen.shape).numpy()
