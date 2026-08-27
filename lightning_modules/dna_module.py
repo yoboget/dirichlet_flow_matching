@@ -532,7 +532,8 @@ class DNAModule(GeneralModule):
             self.loaded_classifiers = True
 
     def on_train_epoch_end(self):
-        self.train_out_initialized = True
+        if self.train_outputs['clss_cleancls'] and self.train_outputs['embeddings_cleancls']:
+            self.train_out_initialized = True
         log = self._log
         log = {key: log[key] for key in log if "train_" in key}
         log = self.gather_log(log, self.trainer.world_size)
