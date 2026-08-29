@@ -205,8 +205,8 @@ class PromoterModule(GeneralModule):
                 # x_next[:, :, diag_idx, diag_idx] = x_i_next
                 # xt = (out_probs.unsqueeze(-1) * x_next).sum(-2)
 
-                S = (flow_probs * scale).sum(-1, keepdim=True)  # (B, L, 1)
-                xt = xt * (S - flow_probs * scale) + flow_probs * x_i_next
+                S = (out_probs * scale).sum(-1, keepdim=True)  # (B, L, 1)
+                xt = xt * (S - out_probs * scale) + flow_probs * x_i_next
             elif args.flow_method == 'unsid':
                 k = Categorical(out_probs).sample().to(self.device)
                 k_one_hot = F.one_hot(k, num_classes=out_probs.size(-1)).to(self.device)
