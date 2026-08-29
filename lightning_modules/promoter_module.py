@@ -199,15 +199,14 @@ class PromoterModule(GeneralModule):
                 x_i_next = torch.as_tensor(x_i_next, dtype=x_i_t.dtype, device=x_i_t.device).clamp(eps, 1.0 - eps)
                 # scale[b, i] = (1 - x_i_next[b, i]) / (1 - x_t[b, i])
                 scale = (1.0 - x_i_next) / (1.0 - x_i_t)  # (B, n, k)
-                # scale = x_i_next / x_i_t
 
-                # Broadcast rescale: x_next[b, i, j] = x_t[b, j] * scale[b, i]
-                x_next = xt.unsqueeze(-2) * scale.unsqueeze(-1)  # (B, n, k, k)
-                # Overwrite the target coordinate (the diagonal in the last two axes):
-                # x_next[b, i, i] = x_i_next[b, i]
-                diag_idx = torch.arange(k, device=self.device)
-                x_next[:, :, diag_idx, diag_idx] = x_i_next
-                xt = (out_probs.unsqueeze(-1) * x_next).sum(-2)
+                # x_next = xt.unsqueeze(-2) * scale.unsqueeze(-1)  # (B, n, k, k)
+                # diag_idx = torch.arange(k, device=self.device)
+                # x_next[:, :, diag_idx, diag_idx] = x_i_next
+                # xt = (out_probs.unsqueeze(-1) * x_next).sum(-2)
+
+                S = (flow_probs * scale).sum(-1, keepdim=True)  # (B, L, 1)
+                xt = xt * (S - flow_probs * scale) + flow_probs * x_i_next
             elif args.flow_method == 'unsid':
                 k = Categorical(out_probs).sample().to(self.device)
                 k_one_hot = F.one_hot(k, num_classes=out_probs.size(-1)).to(self.device)
