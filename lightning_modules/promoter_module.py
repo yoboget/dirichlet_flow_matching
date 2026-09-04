@@ -189,24 +189,28 @@ class PromoterModule(GeneralModule):
             elif args.flow_method == 'cdf_trick':
                 eps = 10e-8
                 k = xt.size(-1)
-                # For each (b, n, i) we map the i-th coordinate of x_t[b, n].
-                # x_t itself, clamped, already gives every (b, i) value -- shape (B, n, k).
                 x_i_t = xt.clamp(min=eps, max=1.0 - eps)  # (B, n, k)
 
-                # u = self.beta.cdf(x_i_t, i)#.clamp(eps, 1.0 - eps)  # (B, n, k)
-                # x_i_next = self.beta.ppf(u, i + 1)  # (B, n, k)
+                u = self.beta.cdf(x_i_t, i)#.clamp(eps, 1.0 - eps)  # (B, n, k)
+                x_i_next = self.beta.ppf(u, i + 1)  # (B, n, k)
+                # u = x_i_t ** s
+                # x_i_next = u ** (1/t)
+
+                x_i_next = torch.as_tensor(x_i_next, dtype=x_i_t.dtype, device=x_i_t.device).clamp(eps, 1.0 - eps)
+                scale = (1.0 - x_i_next) / (1.0 - x_i_t)  # (B, n, k)
+
+                S = (out_probs * scale).sum(-1, keepdim=True)  # (B, L, 1)
+                xt = xt * (S - out_probs * scale) + out_probs * x_i_next
+            elif args.flow_method == 'cdf_trick2':
+                eps = 10e-8
+                k = xt.size(-1)
+                x_i_t = xt.clamp(min=eps, max=1.0 - eps)  # (B, n, k)
+
                 u = x_i_t ** s
                 x_i_next = u ** (1/t)
 
                 x_i_next = torch.as_tensor(x_i_next, dtype=x_i_t.dtype, device=x_i_t.device).clamp(eps, 1.0 - eps)
-                # scale[b, i] = (1 - x_i_next[b, i]) / (1 - x_t[b, i])
                 scale = (1.0 - x_i_next) / (1.0 - x_i_t)  # (B, n, k)
-
-                # x_next = xt.unsqueeze(-2) * scale.unsqueeze(-1)  # (B, n, k, k)
-                # diag_idx = torch.arange(k, device=self.device)
-                # x_next[:, :, diag_idx, diag_idx] = x_i_next
-                # xt = (out_probs.unsqueeze(-1) * x_next).sum(-2)
-
                 S = (out_probs * scale).sum(-1, keepdim=True)  # (B, L, 1)
                 xt = xt * (S - out_probs * scale) + out_probs * x_i_next
             elif args.flow_method == 'unsid':
