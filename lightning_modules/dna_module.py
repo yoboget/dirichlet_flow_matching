@@ -255,8 +255,11 @@ class DNAModule(GeneralModule):
                 k = xt.size(-1)
                 x_i_t = xt.clamp(min=eps, max=1.0 - eps)  # (B, n, k)
 
-                u = self.beta.cdf(x_i_t, i)
-                x_i_next = self.beta.ppf(u, i + 1)
+                # u = self.beta.cdf(x_i_t, i)
+                # x_i_next = self.beta.ppf(u, i + 1)
+
+                u = x_i_t ** t
+                x_i_next = u ** (1 / t)
 
                 x_i_next = torch.as_tensor(x_i_next, dtype=x_i_t.dtype, device=x_i_t.device)  # .clamp(eps, 1.0 - eps)
                 scale = (1.0 - x_i_next) / (1.0 - x_i_t)
