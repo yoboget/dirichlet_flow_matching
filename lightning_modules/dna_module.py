@@ -258,7 +258,7 @@ class DNAModule(GeneralModule):
                 # u = self.beta.cdf(x_i_t, i)
                 # x_i_next = self.beta.ppf(u, i + 1)
 
-                u = x_i_t ** t
+                u = x_i_t ** s
                 x_i_next = u ** (1 / t)
 
                 x_i_next = torch.as_tensor(x_i_next, dtype=x_i_t.dtype, device=x_i_t.device)  # .clamp(eps, 1.0 - eps)
