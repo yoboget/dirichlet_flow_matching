@@ -42,6 +42,7 @@ class GeneralModule(pl.LightningModule):
         if self.trainer.is_global_zero:
             logger.info(f'Total sampling time: {self.total_sampling_time:.2f}s')
             if self.args.wandb:
+                wandb.log({'total_sampling_time': self.total_sampling_time})
                 wandb.run.summary['total_sampling_time'] = self.total_sampling_time
 
     def try_print_log(self):
@@ -99,7 +100,8 @@ class GeneralModule(pl.LightningModule):
         mean_log = self.get_log_mean(log)
         mean_log.update(
             {'epoch': float(self.trainer.current_epoch), 'step': float(self.trainer.global_step), 'iter_step': float(self.iter_step),
-             'val_total_sampling_time': self.total_sampling_time})
+             'val_total_sampling_time': self.total_sampling_time,
+             'total_sampling_time': self.total_sampling_time})
 
         if self.trainer.is_global_zero:
             logger.info(str(mean_log))
