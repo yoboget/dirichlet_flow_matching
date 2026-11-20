@@ -32,8 +32,13 @@ class GeneralModule(pl.LightningModule):
         """Times a block that generates samples (e.g. the flow-matching inference loop) and
         accumulates it into self.total_sampling_time, so the total time spent sampling over the
         whole run can be compared across experiments/seeds (see on_fit_end)."""
+        # CUDA kernels run asynchronously: synchronise so that dt is the time the samples are actually ready
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
         start = time.time()
         yield
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
         dt = time.time() - start
         self.total_sampling_time += dt
         self.lg('sampling_time', torch.tensor(dt)[None].expand(batch_size))

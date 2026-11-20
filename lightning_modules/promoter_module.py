@@ -242,14 +242,14 @@ class PromoterModule(GeneralModule):
                 diag_idx = torch.arange(k, device=self.device)
                 x_next[:, :, diag_idx, diag_idx] = x_i_next
 
-                x_next = partial_resampling(x_next, t, args.flow_score)
+                x_next = partial_resampling(x_next, t, 1.0 - args.eta)  # rho = 1 - eta: rho = 1 keeps the quantile map
 
-                if args.sampling_score > 0:
+                if args.lambd_ > 0:
                     eps = 1e-24
-                    alphas = torch.clamp(out_probs * args.sampling_score, min=eps)
+                    alphas = torch.clamp(out_probs * args.lambd_, min=eps)
                     w = Dirichlet(alphas).sample().to(self.device)  # (B,n,n,k)
                     xt = (w.unsqueeze(-1) * x_next).sum(dim=-2)
-                elif args.sampling_score == 0:
+                elif args.lambd_ == 0:
                     b, n, k = out_probs.size()
                     x = Categorical(probs=out_probs).sample().to(self.device)
 

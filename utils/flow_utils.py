@@ -581,7 +581,8 @@ class BetaTable:
     @staticmethod
     def _interp1d(query: torch.Tensor, xs: torch.Tensor, ys: torch.Tensor) -> torch.Tensor:
         # xs: (G,), ys: (G,), query: (...,)
-        q = query.clamp(min=xs[0].item(), max=xs[-1].item())
+        # tensor bounds (not .item()): no GPU -> CPU synchronisation
+        q = torch.clamp(query, min=xs[0], max=xs[-1])
         # right-side bin index, then back off to a valid left neighbour
         idx_r = torch.searchsorted(xs, q, right=True).clamp(1, xs.numel() - 1)
         idx_l = idx_r - 1
@@ -596,9 +597,20 @@ class BetaTable:
     # -------------------------------------------------------------------------
     # Public API
     # -------------------------------------------------------------------------
+    def to(self, device):
+        """Move the tables to `device` (no-op if they are already there)."""
+        device = torch.device(device)
+        if self.x_table.device != device:
+            self.u_grid = self.u_grid.to(device)
+            self.x_table = self.x_table.to(device)
+            self.device = device
+        return self
+
     def ppf(self, u: torch.Tensor, alpha_idx: int) -> torch.Tensor:
-        """Inverse CDF at scheduled alpha index s:   x = F^{-1}(u;  alpha_s, b)."""
-        u = u.to(self.dtype).to(self.device)
+        """Inverse CDF at scheduled alpha index s:   x = F^{-1}(u;  alpha_s, b).
+        Computed on the device of `u` (the tables follow it, they are moved only once)."""
+        self.to(u.device)
+        u = u.to(self.dtype)
         xs = self.u_grid  # (G,) -- the u-axis is shared
         ys = self.x_table[alpha_idx]  # (G,) -- x as a function of u
         return self._interp1d(u, xs, ys)
@@ -608,7 +620,8 @@ class BetaTable:
         Implemented by interpolating the *inverse* of the same table: we already
         know (x_table[s, :], u_grid) pairs, so we just swap their roles.
         """
-        x = x.to(self.dtype).to(self.device)
+        self.to(x.device)
+        x = x.to(self.dtype)
         xs = self.x_table[alpha_idx]  # (G,) -- now the abscissae
         ys = self.u_grid  # (G,) -- and these are the ordinates
         return self._interp1d(x, xs, ys)

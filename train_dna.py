@@ -1,7 +1,7 @@
 from torch.utils.data import WeightedRandomSampler, Subset
 
 from lightning_modules.dna_module import DNAModule
-from utils.dataset import ToyDataset, TwoClassOverfitDataset, EnhancerDataset
+from utils.dataset import ToyDataset, TwoClassOverfitDataset, EnhancerDataset, ToyDataset2
 from utils.parsing import parse_train_args
 args = parse_train_args()
 import argparse
@@ -11,6 +11,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 
 torch.serialization.add_safe_globals([argparse.Namespace])
 torch.serialization.add_safe_globals([ToyDataset])
+torch.serialization.add_safe_globals([ToyDataset2])
 
 pl.seed_everything(args.seed, workers=True)
 
@@ -19,11 +20,10 @@ if args.wandb:
         # entity="anonymized",
         settings=wandb.Settings(start_method="fork"),
         project=f"{args.run_name}",
-        name=f'{args.flow_method}_{args.alpha_max}_{args.sampling_score}_{args.flow_score}_seed{args.seed}',
-        group=f'{args.flow_method}_{args.alpha_max}_{args.sampling_score}_{args.flow_score}',
+        name=f'{args.flow_method}_{args.alpha_max}_lambda{args.lambd_}_eta{args.eta}_seed{args.seed}',
+        group=f'{args.flow_method}_{args.alpha_max}_lambda{args.lambd_}_eta{args.eta}',
         config=args,
     )
-
 trainer = pl.Trainer(
     default_root_dir=os.environ["MODEL_DIR"],
     accelerator="gpu" if torch.cuda.is_available() else 'auto',
@@ -63,6 +63,10 @@ if args.dataset_type == 'toy_fixed':
     toy_data = train_ds
 elif args.dataset_type == 'toy_sampled':
     train_ds = ToyDataset(args)
+    val_ds = train_ds
+    toy_data = train_ds
+elif args.dataset_type == 'toy_sampled2':
+    train_ds = ToyDataset2(args)
     val_ds = train_ds
     toy_data = train_ds
 elif args.dataset_type == 'enhancer':

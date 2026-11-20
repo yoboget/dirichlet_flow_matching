@@ -6,13 +6,25 @@ Usage:
 
 Requires: pip install wandb matplotlib
 You must be logged in (`wandb login`) or have WANDB_API_KEY set.
+
+Sampler parameters (flow_method = 'tuned'):
+    eta    : 0 = conditional quantile map (deterministic), 1 = total resampling
+    lambd_ : 0 = sample one class, > 0 = Dirichlet(lambda * p) weights, +inf (-1 in configs) = weighted average
+Runs launched with the old argument names (sampling_score = lambda, flow_score = 1 - eta) are found too,
+see run_groups.py.
 """
 
 import argparse
+import math
+import os
+import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
 import wandb
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from run_groups import fetch_group_runs  # noqa: E402
 
 
 def fetch_runs(entity: str, project: str, filters: dict):
@@ -36,15 +48,32 @@ def extract_points(runs, param: str, metric: str):
     return xs, ys, names
 
 
-def extract_runs_metric(runs_groups,  metric: str):
+def extract_runs_metric(runs_groups,  metric: str, num_integration_steps=100):
+    """Mean / std of `metric` over seeds 0-2 for each group of runs.
+
+    Group names do not contain num_integration_steps, so the same group holds runs with different
+    NFE (e.g. 8, 32, 100, 256 for tuned_8.0_*). Only runs with the requested NFE are used.
+    """
     mean = []
     std = []
     for group in runs_groups:
         metric_values = []
+        seeds = []
         for run in group:
-            if run.config['seed']<=2:
-                metric_values.append(run.summary.get(metric))
-        metric_values = np.array(metric_values)
+            if run.config['seed']<=2 and run.config.get('num_integration_steps') == num_integration_steps:
+                value = run.summary.get(metric)
+                if value is None:
+                    # crashed / still running / never validated: no metric in the summary
+                    print(f"Skipping run '{run.name}' (group {run.group}, state {run.state}): no {metric!r}")
+                    continue
+                metric_values.append(value)
+                seeds.append(run.config['seed'])
+        if not metric_values:
+            print(f'No run with {metric!r} and num_integration_steps={num_integration_steps} in this group')
+        elif len(set(seeds)) < len(seeds):
+            print(f'Warning: duplicate seeds {sorted(seeds)} (same configuration run twice) in groups '
+                  f'{sorted({r.group for r in group})}')
+        metric_values = np.array(metric_values, dtype=float)
         mean.append(np.mean(metric_values))
         std.append(np.std(metric_values))
     return np.asarray(mean), np.asarray(std)
@@ -57,7 +86,6 @@ def mybarplot(label, mean, std, title, ymin, ymax, xlabel=None, ylabel=None):
     plt.ylim(ymin, ymax)
     plt.ylabel(ylabel, fontsize=18)
     plt.xlabel(xlabel, fontsize=18)
-    plt.title(title, fontsize=18)
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
     plt.gca().spines["top"].set_visible(False)
@@ -67,42 +95,48 @@ def mybarplot(label, mean, std, title, ymin, ymax, xlabel=None, ylabel=None):
     plt.show()
 
 
-def extract_runs(entity, project, lambda_, eta, alpha_max=64.0,
-                 nfe=100, flow_method='tuned'):
-    runs_groups = []
-    if isinstance(eta,  tuple):
-        for i, eta in enumerate(eta):
-            runs_groups.append(fetch_runs(entity, project, filters={"group": f"{flow_method}_{alpha_max}_{lambda_}_{eta}"
-                                                                    }))
-    elif isinstance(lambda_, tuple):
-        for i, lambda_ in enumerate(lambda_):
-            runs_groups.append(fetch_runs(entity, project, filters={"group": f"{flow_method}_{alpha_max}_{lambda_}_{eta}"
-                                                                    }))
-    return runs_groups
+def extract_runs(entity, project, lambd_, eta, alpha_max=8, flow_method='tuned'):
+    """One list of runs per value of the swept parameter (pass a tuple for either lambd_ or eta).
+
+    eta: 0 = conditional quantile map, 1 = total resampling.
+    lambd_: 0 = sample one class, > 0 = Dirichlet weights, math.inf (or -1) = weighted average.
+    Runs logged with the old names (sampling_score / flow_score = 1 - eta) are included.
+    """
+    if isinstance(eta, tuple):
+        configs = [(lambd_, e) for e in eta]
+    elif isinstance(lambd_, tuple):
+        configs = [(lam, eta) for lam in lambd_]
+    else:
+        configs = [(lambd_, eta)]
+    return [fetch_group_runs(entity, project, flow_method, alpha_max, lam, e) for lam, e in configs]
 
 def print_metric(mean, std, param_values, decimals=1):
     text = ''
     print('-----')
     for m, s, p in zip(mean, std, param_values):
-        text = f'{p} & $ {m:.{decimals}f} \pm {s:.{decimals}f} $ \\\ '
+        text = f'{p} & $ {m:.{decimals}f} \\pm {s:.{decimals}f} $ \\\\ '
         print(text)
 
+
+etas = (0.0, 0.05, 0.25, 0.5, 0.75, 0.95, 1.0)
+lambdas = (0.0, 0.1, 1.0, 10.0, 100.0, math.inf)
+lambda_labels = (0.0, 0.1, 1.0, 10.0, 100.0, '+inf')
+
+# ---------------- varying eta ----------------
 entity = 'yobo'
 project = 'Promoter3'
 title = 'Promoter DNA(bis)'
 metric = 'val_sp-mse'
-param = 'sampling_score'
 ylabel = 'MSE $(10^3)$'
-xlabel = '$\eta$'
-param_values = (0.0, 0.05, 0.25, 0.5, 0.75, 0.95, 1.0)[::-1]
-labels = (1.0, 0.95, 0.75, 0.50, 0.25, 0.05, 0.0)[::-1]
+xlabel = '$\\eta$'
+alpha_max = 32
 
-runs_groups = extract_runs(entity, project, lambda_=0.0, eta = param_values)
+runs_groups = extract_runs(entity, project, lambd_=0.0, eta=etas, alpha_max=alpha_max)
 mean, std = extract_runs_metric(runs_groups,  metric)
 
-print_metric(mean, std, labels, decimals=4)
+print_metric(mean, std, etas, decimals=4)
 mean = mean * 1000
-mybarplot([str(a) for a in labels], mean, std, title=title, ymin=24, ymax=43,
+mybarplot([str(a) for a in etas], mean, std, title=title, ymin=24, ymax=32,
           xlabel=xlabel, ylabel=ylabel)
 
 
@@ -110,97 +144,65 @@ entity = 'yobo'
 project = 'FlyBrain'
 title = 'Fly Brain'
 metric = 'val_fxd_generated_to_allseqs'
-param = 'sampling_score'
 ylabel = 'FBD'
-xlabel = '$\eta$'
-param_values = (0.0, 0.05, 0.25, 0.5, 0.75, 0.95, 1.0)[::-1]
-labels = (1.0, 0.95, 0.75, 0.5, 0.25, 0.05, 0.0)[::-1]
+xlabel = '$\\eta$'
 
-runs_groups = extract_runs(entity, project, lambda_=0.0, eta = param_values)
+runs_groups = extract_runs(entity, project, lambd_=0.0, eta=etas)
 mean, std = extract_runs_metric(runs_groups,  metric)
-print_metric(mean, std, labels)
-mybarplot([str(a) for a in labels], mean, std, title=title, ymin=10, ymax=30,
-          xlabel=xlabel, ylabel=ylabel)
-
-entity = 'yobo'
-project = 'FlyBrain'
-title = 'Fly Brain ($\lambda=+$inf)'
-metric = 'val_fxd_generated_to_allseqs'
-param = 'sampling_score'
-ylabel = 'FBD'
-xlabel = '$\eta$'
-param_values = (0.0, 0.05, 0.25, 0.5, 0.75, 0.95, 1.0)[::-1]
-labels = (1.0, 0.95, 0.75, 0.5, 0.25, 0.05, 0.0)[::-1]
-
-runs_groups = extract_runs(entity, project, lambda_=-1.0, eta = param_values)
-mean, std = extract_runs_metric(runs_groups,  metric)
-print_metric(mean, std, labels)
-mybarplot([str(a) for a in labels], mean, std, title=title, ymin=10, ymax=30,
+print_metric(mean, std, etas)
+mybarplot([str(a) for a in etas], mean, std, title=title, ymin=10, ymax=30,
           xlabel=xlabel, ylabel=ylabel)
 
 entity = 'yobo'
 project = 'Melanoma'
 title = 'Melanoma'
 metric = 'val_fxd_generated_to_allseqs'
-param = 'sampling_score'
 ylabel = 'FBD'
-xlabel = '$\eta$'
-param_values = (0.0, 0.05, 0.25, 0.5, 0.75, 0.95, 1.0)[::-1]
-labels = (1.0, 0.95, 0.75, 0.5, 0.25, 0.05, 0.0)[::-1]
+xlabel = '$\\eta$'
 
-runs_groups = extract_runs(entity, project, lambda_=0.0, eta = param_values)
+runs_groups = extract_runs(entity, project, lambd_=0.0, eta=etas)
 mean, std = extract_runs_metric(runs_groups,  metric)
-print_metric(mean, std, labels)
-mybarplot([str(a) for a in labels], mean, std, title=title, ymin=0, ymax=50,
+print_metric(mean, std, etas)
+mybarplot([str(a) for a in etas], mean, std, title=title, ymin=0, ymax=50,
           xlabel=xlabel, ylabel=ylabel)
 
 
+# ---------------- varying lambda, at eta = 0 (conditional quantile map) ----------------
 project = 'Promoter3'
 title = 'Promoter DNA'
 ylabel = 'MSE $(10^3)$'
-xlabel = '$\lambda$'
+xlabel = '$\\lambda$'
 metric = 'val_sp-mse'
-param = 'sampling_score'
-alpha_max = 64.0
-param_values = (0.0, 0.1, 1.0, 10.0, 100.0, -1.0)
-labels = (0.0, 0.1, 1.0, 10.0, 100.0, '+inf')
+alpha_max = 32
 
-runs_groups = extract_runs(entity, project, lambda_=param_values, eta = 1.0,
-                           alpha_max=alpha_max)
+runs_groups = extract_runs(entity, project, lambd_=lambdas, eta=0.0, alpha_max=alpha_max)
 mean, std = extract_runs_metric(runs_groups,  metric)
-print_metric(mean, std, labels, decimals=4)
+print_metric(mean, std, lambda_labels, decimals=4)
 mean = mean * 1000
-mybarplot([str(a) for a in labels], mean, std, title=title, ymin=26, ymax=29,
+mybarplot([str(a) for a in lambda_labels], mean, std, title=title, ymin=24, ymax=28,
           xlabel=xlabel, ylabel=ylabel)
 
 entity = 'yobo'
 project = 'Melanoma'
 ylabel = 'FBD'
-xlabel = '$\lambda$'
+xlabel = '$\\lambda$'
 metric = 'val_fxd_generated_to_allseqs'
 
-param = 'flow_score'
-param_values = (0.0, 0.1, 1.0, 10.0, 100.0, -1.0)
-labels = (0.0, 0.1, 1.0, 10.0, 100.0, '+inf')
-
-runs_groups = extract_runs(entity, project, lambda_=param_values, eta = 0.0)
+runs_groups = extract_runs(entity, project, lambd_=lambdas, eta=0.0)
 mean, std = extract_runs_metric(runs_groups,  metric)
-print_metric(mean, std, labels)
-mybarplot([str(a) for a in labels], mean, std, title=project, ymin=4, ymax=6,
+print_metric(mean, std, lambda_labels)
+mybarplot([str(a) for a in lambda_labels], mean, std, title=project, ymin=4, ymax=6,
           xlabel=xlabel, ylabel=ylabel)
 
 entity = 'yobo'
 project = 'FlyBrain'
 title = 'Fly Brain'
 ylabel = 'FBD'
-xlabel = '$\lambda$'
+xlabel = '$\\lambda$'
 metric = 'val_fxd_generated_to_allseqs'
-param = 'flow_score'
-param_values = (0.0, 0.1, 1.0, 10.0, 100.0, -1.0)
-labels = (0.0, 0.1, 1.0, 10.0, 100.0, '+inf')
 
-runs_groups = extract_runs(entity, project, lambda_=param_values, eta = 1.0)
+runs_groups = extract_runs(entity, project, lambd_=lambdas, eta=0.0)
 mean, std = extract_runs_metric(runs_groups,  metric)
-print_metric(mean, std, labels)
-mybarplot([str(a) for a in labels], mean, std, title=title, ymin=13, ymax=17,
+print_metric(mean, std, lambda_labels)
+mybarplot([str(a) for a in lambda_labels], mean, std, title=title, ymin=13, ymax=17,
           xlabel=xlabel, ylabel=ylabel)

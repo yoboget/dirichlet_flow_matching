@@ -53,14 +53,15 @@ def parse_train_args():
     parser.add_argument("--taskiran_seq_path", type=str, default=None)
 
     # Data
-    parser.add_argument('--dataset_type', type=str, choices=['enhancer', 'toy_fixed','toy_sampled'], default='argmax')
+    parser.add_argument('--dataset_type', type=str, choices=['enhancer', 'toy_fixed','toy_sampled', 'toy_sampled2'], default='argmax')
     parser.add_argument("--mel_enhancer", action='store_true')
     parser.add_argument("--overfit", action='store_true')
     parser.add_argument("--promoter_dataset", action='store_true')
-    parser.add_argument("--toy_simplex_dim", type=int, default=4)
+    parser.add_argument("--toy_simplex_dim", type=int, default=2)
     parser.add_argument("--toy_num_cls", type=int, default=3)
     parser.add_argument("--toy_num_seq", type=int, default=1000)
     parser.add_argument("--toy_seq_len", type=int, default=20)
+    parser.add_argument("--num_modes", type=int, default=2, help='number of hypotheses predicted by the model. >1 trains with a winner-take-all loss plus a mode-commitment loss.')
     parser.add_argument("--num_workers", type=int, default=4)
 
     # Guidance
@@ -87,7 +88,7 @@ def parse_train_args():
     parser.add_argument("--clean_cls_model", choices=['mlp', 'cnn', 'transformer', 'deepflybrain'], default='cnn')
     parser.add_argument("--clean_data", action="store_true", help='do not noise to the model input. E.g. for training a clean calssifier.')
     parser.add_argument("--mode", choices=['distill', 'dirichlet', 'riemannian', 'mlm', 'ardm', 'lrar', 'cdcd', 'ppl_eval'], default='dirichlet')
-    parser.add_argument("--flow_method", choices=['original', 'cdf_trick', 'unsid', 'tuned', 'cdf_trick2'], default='unsid')
+    parser.add_argument("--flow_method", choices=['original', 'cdf_trick', 'unsid', 'tuned'], default='unsid')
     parser.add_argument("--simplex_spacing", type=int, default=1000, help='deprecated, has no influence')
     parser.add_argument("--prior_pseudocount", type=float, default=2, help='hyperparameter for expand_simplex function. Can be kept at 2 and should not matter much.')
     parser.add_argument("--dropout", type=float, default=0.0)
@@ -105,13 +106,20 @@ def parse_train_args():
     parser.add_argument("--simplex_encoding_dim", type=int, default=64)
     parser.add_argument("--flow_temp", type=float, default=1.0)
     parser.add_argument('--val_pred_type', type=str, choices=['argmax', 'sample'], default='argmax')
-    parser.add_argument('--num_integration_steps', type=int, default=100, help='The number of integration steps used during inference.')
+    parser.add_argument('--num_integration_steps', type=int, default=4, help='The number of integration steps used during inference.')
 
     # Sampling
-    parser.add_argument("--sampling_score", type=float, default=-1,
-                        help='Score btw averaging (0) across conditional flow or sampling one (+inf, coded -1)')
-    parser.add_argument("--flow_score", type=float, default=0.,
-                        help = 'How to get the conditional x_{t+h}|x_1: 1 = Flow: deterministic, 0 = complete resampling')
+    parser.add_argument("--lambd_", type=float, default=-1.,
+                        help='lambda: how the per-class conditional maps are combined. 0 = sample one class from the '
+                             'denoiser probs p, >0 = Dirichlet(lambda * p) mixing weights, -1 (lambda = +inf) = '
+                             'average weighted by p (deterministic)')
+    parser.add_argument("--eta", type=float, default=1.,
+                        help='eta: how to get the conditional x_{t+h} | x_1. 0 = conditional quantile map '
+                             '(deterministic), 1 = total resampling from the conditional Dirichlet, in between = '
+                             'partial resampling (eta <= 0 is also deterministic)')
+    # Deprecated names, kept so that old launch scripts still work. Converted to lambd_ / eta below.
+    parser.add_argument("--sampling_score", type=float, default=None, help='deprecated: same as --lambd_')
+    parser.add_argument("--flow_score", type=float, default=None, help='deprecated: --eta = 1 - flow_score')
 
     # Logging
     parser.add_argument("--no_tqdm", action="store_true")
@@ -121,6 +129,15 @@ def parse_train_args():
     parser.add_argument("--seed", type=int, default=42, help='seed for torch/numpy/python RNGs and dataloader workers, so multiple runs with different seeds can be compared for variance in the metrics.')
 
     args = parser.parse_args()
+    # Deprecated sampling arguments: sampling_score == lambd_, flow_score == 1 - eta.
+    explicit = set(a.split('=')[0] for a in sys.argv[1:] if a.startswith('--'))
+    if args.sampling_score is not None:
+        assert '--lambd_' not in explicit, 'give either --lambd_ or the deprecated --sampling_score, not both'
+        args.lambd_ = args.sampling_score
+    if args.flow_score is not None:
+        assert '--eta' not in explicit, 'give either --eta or the deprecated --flow_score, not both'
+        args.eta = round(1.0 - args.flow_score, 10)
+    del args.sampling_score, args.flow_score
     timestamp = datetime.fromtimestamp(datetime.now().timestamp()).strftime("%Y-%m-%d_%H-%M-%S")
     os.environ["MODEL_DIR"] = os.path.join("workdir", (args.run_name + f'_seed{args.seed}' + '_' + timestamp))
     os.environ["WANDB_LOGGING"] = str(int(args.wandb))

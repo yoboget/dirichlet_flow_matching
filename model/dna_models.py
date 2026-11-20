@@ -69,9 +69,12 @@ class CNNModel(nn.Module):
         self.convs = nn.ModuleList([copy.deepcopy(layer) for layer in self.convs for i in range(args.num_cnn_stacks)])
         self.time_layers = nn.ModuleList([Dense(args.hidden_dim, args.hidden_dim) for _ in range(self.num_layers)])
         self.norms = nn.ModuleList([nn.LayerNorm(args.hidden_dim) for _ in range(self.num_layers)])
+        # with num_modes > 1, each position outputs num_modes mode logits followed by num_modes * alphabet_size token logits
+        num_modes = getattr(args, 'num_modes', 1)
+        out_size = self.alphabet_size if num_modes == 1 else num_modes * (1 + self.alphabet_size)
         self.final_conv = nn.Sequential(nn.Conv1d(args.hidden_dim, args.hidden_dim, kernel_size=1),
                                    nn.ReLU(),
-                                   nn.Conv1d(args.hidden_dim, args.hidden_dim if classifier else self.alphabet_size, kernel_size=1))
+                                   nn.Conv1d(args.hidden_dim, args.hidden_dim if classifier else out_size, kernel_size=1))
         self.dropout = nn.Dropout(args.dropout)
         if classifier:
             self.cls_head = nn.Sequential(nn.Linear(args.hidden_dim, args.hidden_dim),

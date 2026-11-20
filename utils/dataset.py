@@ -4,8 +4,7 @@ import pickle
 import torch, esm, random, os, json
 import numpy as np
 from Bio import SeqIO
-
-
+from torch._C import dtype
 
 
 class EnhancerDataset(torch.utils.data.Dataset):
@@ -81,4 +80,43 @@ class ToyDataset(torch.utils.data.IterableDataset):
             for i in range(self.seq_len):
                 seq.append(torch.multinomial(replacement=True,num_samples=1,input=self.probs[cls,i,:]))
             yield torch.tensor(seq), cls
+
+
+class ToyDataset2(torch.utils.data.IterableDataset):
+    def __init__(self, args):
+        super().__init__()
+        self.num_cls = args.toy_num_cls
+        self.seq_len = args.toy_seq_len
+        self.alphabet_size = args.toy_simplex_dim
+
+        if args.cls_ckpt is not None:
+            distribution_dict = torch.load(os.path.join(os.path.dirname(args.cls_ckpt), 'toy_distribution_dict.pt'))
+            self.probs = distribution_dict['probs']
+            self.class_probs = distribution_dict['class_probs']
+        else:
+            self.probs = 0.66
+
+            # self.probs = torch.softmax(torch.rand((self.num_cls, self.seq_len, self.alphabet_size)), dim=2)
+            self.class_probs = torch.ones(self.num_cls)
+            if self.num_cls > 1:
+                self.class_probs = self.class_probs * 1 / 2 / (self.num_cls - 1)
+                self.class_probs[0] = 1 / 2
+            assert self.class_probs.sum() == 1
+
+            distribution_dict = {'probs': self.probs, 'class_probs': self.class_probs}
+        torch.save(distribution_dict, os.path.join(os.environ["MODEL_DIR"], 'toy_distribution_dict.pt' ))
+
+        # the distribution is a mixture of these sequences: mode 1 with prob self.probs, mode 0 otherwise
+        self.modes = torch.tensor([[0, 0], [1, 1]])
+        self.mode_probs = torch.tensor([1 - self.probs, self.probs])
+        # true per-position marginals [L, K], comparable to ToyDataset.probs[cls]
+        self.marginal_probs = (self.mode_probs[:, None, None] * torch.nn.functional.one_hot(self.modes, num_classes=self.alphabet_size).float()).sum(0)
+
+    def __len__(self):
+        return 10000000000
+    def __iter__(self):
+        while True:
+            sample_mode = int(torch.bernoulli(torch.tensor(self.probs)).item())
+            seq = self.modes[sample_mode]
+            yield seq, torch.ones(1)
 

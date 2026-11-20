@@ -99,8 +99,24 @@ class DNAModule(GeneralModule):
             cls_inp = None
         logits = self.model(xt_inp, t=alphas, cls=cls_inp)
 
-        losses = torch.nn.functional.cross_entropy(logits.transpose(1, 2), seq_distill if self.args.mode == 'distill' else seq, reduction='none')
-        losses = losses.mean(-1)
+        target = seq_distill if self.args.mode == 'distill' else seq
+        if self.args.num_modes > 1:
+            mode_logits, seq_logits = self.split_mode_logits(logits)  # [B, M], [B, M, L, K]
+            M = self.args.num_modes
+            # loss of each hypothesis against the same target
+            mode_losses = torch.nn.functional.cross_entropy(seq_logits.permute(0, 3, 1, 2), target[:, None, :].expand(B, M, L), reduction='none').mean(-1)  # [B, M]
+            best_mode = mode_losses.argmin(-1)  # [B]
+            # winner-take-all: only the closest hypothesis is trained on this sample
+            seq_loss = mode_losses.gather(1, best_mode[:, None]).squeeze(1)  # [B]
+            # commitment: the mode head learns which hypothesis wins
+            commit_loss = torch.nn.functional.cross_entropy(mode_logits, best_mode, reduction='none')  # [B]
+            losses = seq_loss + commit_loss
+            self.lg('seq_loss', seq_loss)
+            self.lg('commit_loss', commit_loss)
+            for m in range(M):
+                self.lg(f'mode{m}_win_frac', (best_mode == m).float())
+        else:
+            losses = torch.nn.functional.cross_entropy(logits.transpose(1, 2), target, reduction='none').mean(-1)
 
         self.lg('loss', losses)
         self.lg('perplexity', torch.exp(losses.mean())[None].expand(B))
@@ -150,10 +166,29 @@ class DNAModule(GeneralModule):
         logits = self.model(x0, t=torch.zeros(B, device=self.device))
         return logits
 
+    def split_mode_logits(self, logits):
+        # [B, L, M + M*K] -> mode logits pooled over positions [B, M], token logits per hypothesis [B, M, L, K]
+        B, L, _ = logits.shape
+        M = self.args.num_modes
+        mode_logits = logits[..., :M].mean(1)
+        seq_logits = logits[..., M:].reshape(B, L, M, -1).transpose(1, 2)
+        return mode_logits, seq_logits
+
     @torch.no_grad()
     def dirichlet_flow_inference(self, seq, cls, model, args):
         B, L = seq.shape
         K = model.alphabet_size
+        committed_mode = None
+        def run_model(*model_args, **model_kwargs):
+            # with num_modes > 1, sample a mode at the first step and use that hypothesis for the whole trajectory
+            nonlocal committed_mode
+            out = model(*model_args, **model_kwargs)
+            if getattr(args, 'num_modes', 1) == 1:
+                return out
+            mode_logits, seq_logits = self.split_mode_logits(out)
+            if committed_mode is None:
+                committed_mode = Categorical(logits=mode_logits).sample()
+            return seq_logits[torch.arange(B, device=out.device), committed_mode]
         x0 = torch.distributions.Dirichlet(torch.ones(B, L, model.alphabet_size, device=seq.device)).sample()
         eye = torch.eye(K).to(x0)
         xt = x0.clone()
@@ -161,12 +196,12 @@ class DNAModule(GeneralModule):
         for i, (s, t) in enumerate(zip(t_span[:-1], t_span[1:])):
             xt_expanded, prior_weights = expand_simplex(xt, s[None].expand(B), args.prior_pseudocount)
             if args.cls_free_guidance:
-                logits = model(xt_expanded, t=s[None].expand(B), cls=cls if self.args.all_class_inference else (torch.ones(B, device=self.device) * args.target_class).long())
+                logits = run_model(xt_expanded, t=s[None].expand(B), cls=cls if self.args.all_class_inference else (torch.ones(B, device=self.device) * args.target_class).long())
                 probs_cond = torch.nn.functional.softmax(logits / args.flow_temp, -1)  # [B, L, K]
                 if self.args.score_free_guidance:
                     flow_probs = probs_cond
                 else:
-                    logits_uncond = model(xt_expanded, t=s[None].expand(B), cls=(torch.ones(B, device=self.device) * model.num_cls).long())
+                    logits_uncond = run_model(xt_expanded, t=s[None].expand(B), cls=(torch.ones(B, device=self.device) * model.num_cls).long())
                     probs_unccond = torch.nn.functional.softmax(logits_uncond / args.flow_temp, -1)  # [B, L, K]
                     if self.args.probability_tilt:
                         flow_probs = probs_cond ** (1 - self.args.guidance_scale) * probs_unccond ** (self.args.guidance_scale)
@@ -183,7 +218,7 @@ class DNAModule(GeneralModule):
                         flow_probs = self.get_cls_free_guided_flow(xt, s + 1e-4, logits_uncond, logits)
 
             else:
-                logits = model(xt_expanded, t=s[None].expand(B))
+                logits = run_model(xt_expanded, t=s[None].expand(B))
                 flow_probs = torch.nn.functional.softmax(logits / args.flow_temp, -1) # [B, L, K]
 
             if args.cls_guidance:
@@ -238,24 +273,6 @@ class DNAModule(GeneralModule):
                 else:
                     # Last step should predict the correct category
                     xt = flow_probs
-            elif args.flow_method == 'cdf_trick2':
-                if (i + 1) < self.args.num_integration_steps:
-                    eps = 10e-8
-                    k = xt.size(-1)
-                    # For each (b, n, i) we map the i-th coordinate of x_t[b, n].
-                    # x_t itself, clamped, already gives every (b, i) value -- shape (B, n, k).
-                    x_i_t = xt.clamp(min=eps, max=1.0 - eps)  # (B, n, k)
-                    u = x_i_t ** s
-                    x_i_next = u ** (1 / t)
-
-                    x_i_next = torch.as_tensor(x_i_next, dtype=x_i_t.dtype, device=x_i_t.device)#.clamp(eps, 1.0 - eps)
-                    scale = (1.0 - x_i_next) / (1.0 - x_i_t)  # (B, n, k)
-
-                    x_next = xt.unsqueeze(-2) * scale.unsqueeze(-1)  # (B, n, k, k)
-
-                    diag_idx = torch.arange(k, device=self.device)
-                    x_next[:, :, diag_idx, diag_idx] = x_i_next
-                    xt = (flow_probs.unsqueeze(-1) * x_next).sum(-2)
             elif args.flow_method == 'unsid':
                 k = Categorical(flow_probs).sample().to(self.device)
                 k_one_hot = F.one_hot(k, num_classes=flow_probs.size(-1)).to(self.device)
@@ -276,14 +293,14 @@ class DNAModule(GeneralModule):
                 diag_idx = torch.arange(k, device=self.device)
                 x_next[:, :, diag_idx, diag_idx] = x_i_next
 
-                x_next = partial_resampling(x_next, t, args.flow_score)
+                x_next = partial_resampling(x_next, t, 1.0 - args.eta)  # rho = 1 - eta: rho = 1 keeps the quantile map
 
-                if args.sampling_score > 0:
+                if args.lambd_ > 0:
                     eps = 1e-24
-                    alphas = torch.clamp(flow_probs * args.sampling_score, min=eps)
+                    alphas = torch.clamp(flow_probs * args.lambd_, min=eps)
                     w = Dirichlet(alphas).sample().to(self.device)  # (B,n,n,k)
                     xt = (w.unsqueeze(-1) * x_next).sum(dim=-2)
-                elif args.sampling_score == 0:
+                elif args.lambd_ == 0:
                     b, n, k = flow_probs.size()
                     x = Categorical(probs=flow_probs).sample().to(self.device)
 
@@ -475,6 +492,22 @@ class DNAModule(GeneralModule):
             rkl = (self.toy_data.probs[self.args.target_class] * (torch.log(self.toy_data.probs[self.args.target_class]) - torch.log(empirical_dist))).sum(-1).mean()
             sanity_self_kl = (empirical_dist * (torch.log(empirical_dist) - torch.log(empirical_dist))).sum(-1).mean()
             mean_log.update({'val_kl': kl.cpu().item(), 'val_rkl': rkl.cpu().item(), 'val_sanity_self_kl': sanity_self_kl.cpu().item()})
+        if self.args.dataset_type == 'toy_sampled2' and not self.args.skip_val_sampling:
+            all_seqs = torch.cat(self.val_outputs['seqs'], dim=0).cpu()
+            all_seqs_one_hot = torch.nn.functional.one_hot(all_seqs, num_classes=self.args.toy_simplex_dim)
+            counts = all_seqs_one_hot.sum(0).float()
+            empirical_dist = counts / counts.sum(dim=-1, keepdim=True)
+            true_dist = self.toy_data.marginal_probs
+            # per-position KL as for toy_sampled; xlogy gives 0 * log 0 = 0
+            kl = (torch.xlogy(empirical_dist, empirical_dist) - torch.xlogy(empirical_dist, true_dist)).sum(-1).mean()
+            rkl = (torch.xlogy(true_dist, true_dist) - torch.xlogy(true_dist, empirical_dist)).sum(-1).mean()
+            # joint KL over whole sequences: positions are correlated, so marginals alone miss e.g. [0, 1]
+            matches = all_seqs[:, None, :].eq(self.toy_data.modes[None]).all(-1)  # [N, num_modes]
+            empirical_mode_probs = matches.float().mean(0)
+            joint_rkl = (torch.xlogy(self.toy_data.mode_probs, self.toy_data.mode_probs) - torch.xlogy(self.toy_data.mode_probs, empirical_mode_probs)).sum()
+            mean_log.update({'val_kl': kl.item(), 'val_rkl': rkl.item(), 'val_joint_rkl': joint_rkl.item(),
+                             'val_off_mode_frac': 1 - matches.any(-1).float().mean().item(),
+                             'val_mode1_frac': empirical_mode_probs[1].item()})
 
         if self.args.clean_cls_ckpt:
             if not self.args.target_class == self.model.num_cls:
@@ -517,6 +550,9 @@ class DNAModule(GeneralModule):
                 wandb.log(mean_log)
                 if self.args.dataset_type == 'toy_sampled' and not self.args.skip_val_sampling:
                     pil_dist_comp = self.plot_empirical_and_true(empirical_dist, self.toy_data.probs[self.args.target_class])
+                    wandb.log({'fig': [wandb.Image(pil_dist_comp)], 'step': float(self.trainer.global_step), 'iter_step': float(self.iter_step)})
+                if self.args.dataset_type == 'toy_sampled2' and not self.args.skip_val_sampling:
+                    pil_dist_comp = self.plot_empirical_and_true(empirical_dist, self.toy_data.marginal_probs)
                     wandb.log({'fig': [wandb.Image(pil_dist_comp)], 'step': float(self.trainer.global_step), 'iter_step': float(self.iter_step)})
                 if self.args.cls_ckpt is not None:
                     pil_probs, pil_score_norms = self.plot_score_and_probs()
@@ -578,7 +614,7 @@ class DNAModule(GeneralModule):
         num_datasets_to_plot = min(4, empirical_dist.shape[0])
         width = 1
         # Creating a figure and axes
-        fig, axes = plt.subplots(math.ceil(num_datasets_to_plot/2), 2, figsize=(10, 8))
+        fig, axes = plt.subplots(math.ceil(num_datasets_to_plot/2), 2, figsize=(10, 8), squeeze=False)
         for i in range(num_datasets_to_plot):
             row, col = i // 2, i % 2
             x = np.arange(len(empirical_dist[i]))
