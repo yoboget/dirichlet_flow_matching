@@ -61,7 +61,7 @@ def parse_train_args():
     parser.add_argument("--toy_num_cls", type=int, default=3)
     parser.add_argument("--toy_num_seq", type=int, default=1000)
     parser.add_argument("--toy_seq_len", type=int, default=20)
-    parser.add_argument("--num_modes", type=int, default=2, help='number of hypotheses predicted by the model. >1 trains with a winner-take-all loss plus a mode-commitment loss.')
+    parser.add_argument("--num_modes", type=int, default=1, help='number of hypotheses predicted by the model. >1 trains with a winner-take-all loss plus a mode-commitment loss.')
     parser.add_argument("--num_workers", type=int, default=4)
 
     # Guidance
