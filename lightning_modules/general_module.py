@@ -43,6 +43,14 @@ class GeneralModule(pl.LightningModule):
         self.total_sampling_time += dt
         self.lg('sampling_time', torch.tensor(dt)[None].expand(batch_size))
 
+    def log_total_sampling_time(self, mean_log):
+        """Add the total sampling time (summed over every sampled batch so far) to mean_log and to the wandb
+        summary. Must be called by every on_validation_epoch_end, including the overrides of the subclasses."""
+        mean_log.update({'val_total_sampling_time': self.total_sampling_time,
+                         'total_sampling_time': self.total_sampling_time})
+        if self.trainer.is_global_zero and self.args.wandb:
+            wandb.run.summary['total_sampling_time'] = self.total_sampling_time
+
     def on_fit_end(self):
         if self.trainer.is_global_zero:
             logger.info(f'Total sampling time: {self.total_sampling_time:.2f}s')

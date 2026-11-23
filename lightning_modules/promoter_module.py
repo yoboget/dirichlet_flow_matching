@@ -315,6 +315,7 @@ class PromoterModule(GeneralModule):
         log = self.gather_log(log, self.trainer.world_size)
         mean_log = self.get_log_mean(log)
         mean_log.update({'epoch': self.trainer.current_epoch, 'step': self.trainer.global_step, 'iter_step': self.iter_step})
+        self.log_total_sampling_time(mean_log)
 
         if self.trainer.is_global_zero:
             logger.info(str(mean_log))

@@ -543,6 +543,7 @@ class DNAModule(GeneralModule):
                     mean_log.update({'val_fxd_taskiran_to_targetclsseqs': get_wasserstein_dist(embeds_taskiran, embeds_cls_specific)})
         self.mean_log_ema = update_ema(current_dict=mean_log, prev_ema=self.mean_log_ema, gamma=0.9)
         mean_log.update(self.mean_log_ema)
+        self.log_total_sampling_time(mean_log)  # after the EMA: the total is a running sum, not averaged
         if self.trainer.is_global_zero:
             logger.info(str(mean_log))
             self.log_dict(mean_log, batch_size=1)
