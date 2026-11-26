@@ -111,6 +111,6 @@ def sampling_time_table(entity, experiments, methods=('original', 'cdf_trick'), 
 if __name__ == '__main__':
     experiments = [('Promoter3', 'Promoter'), ('Melanoma', 'Melanoma'), ('FlyBrain', 'Fly Brain')]
     # runs from run_time_*.sh (BetaTable on GPU, synchronised timer, total_sampling_time logged)
-    sampling_time_table('yobo', experiments, gpu='RTX 3090', cpus=1, created_after='2026-11-20')
+    sampling_time_table('yobo', experiments, gpu='RTX 3090', cpus=1, created_after='2026-11-23')
     # old runs (before the fix) only have the per-batch time:
     # sampling_time_table('yobo', experiments, quantity='per_batch')
