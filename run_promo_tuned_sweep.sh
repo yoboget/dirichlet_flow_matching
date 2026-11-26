@@ -3,11 +3,11 @@
 #SBATCH --array=0-14
 #SBATCH --error sbatch/error.e%A_%a
 #SBATCH --output sbatch/out.o%A_%a
-#SBATCH --gres=gpu:nvidia_geforce_rtx_3090:1
+#SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task 1
 #SBATCH --mem=32000
 #SBATCH --partition shared-gpu,public-gpu
-#SBATCH --time 00:45:00
+#SBATCH --time 06:00:00
 
 # Sweep of the 'tuned' sampler on Promoter along the diagonal lambda = eta (as DIAGONAL=true in
 # ModeFlowGraph/run_tuned_sweep.sh): for each ETA value, one run with --eta ETA --lambd_ ETA.
